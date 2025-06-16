@@ -141,7 +141,9 @@ class YandexMusicDownloader:
                 try:
                     liked_tracks = self.client.users_likes_tracks()
                     if liked_tracks:
-                        print(f"✓ Found {len(liked_tracks.track_ids)} liked tracks")
+                        # TracksList has tracks_ids (with underscore), not track_ids
+                        track_count = len(liked_tracks.tracks_ids) if hasattr(liked_tracks, 'tracks_ids') and liked_tracks.tracks_ids else 0
+                        print(f"✓ Found {track_count} liked tracks")
                         return liked_tracks
                     else:
                         print("✗ No liked tracks found")
@@ -389,13 +391,13 @@ class YandexMusicDownloader:
                 return False
             
             # Get tracks
-            if hasattr(playlist, 'tracks'):
+            if hasattr(playlist, 'tracks') and playlist.tracks:
                 tracks = playlist.tracks
-            elif hasattr(playlist, 'track_ids'):
+            elif hasattr(playlist, 'tracks_ids'):
                 # For liked tracks, we need to fetch the actual tracks
                 tracks = []
                 print("Fetching track details...")
-                for track_id in tqdm(playlist.track_ids, desc="Loading tracks"):
+                for track_id in tqdm(playlist.tracks_ids, desc="Loading tracks"):
                     try:
                         track = self.client.tracks([track_id.id])[0]
                         tracks.append(track)
