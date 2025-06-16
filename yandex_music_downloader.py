@@ -32,16 +32,18 @@ except ImportError:
 class YandexMusicDownloader:
     """Main class for downloading Yandex Music playlists."""
     
-    def __init__(self, token: Optional[str] = None, output_dir: str = "downloads"):
+    def __init__(self, token: Optional[str] = None, output_dir: str = "downloads", preferred_format: str = "mp3"):
         """
         Initialize the downloader.
         
         Args:
             token: Yandex Music OAuth token
             output_dir: Directory to save downloaded files
+            preferred_format: Preferred audio format (mp3, flac, aac)
         """
         self.token = token
         self.output_dir = Path(output_dir)
+        self.preferred_format = preferred_format.lower()
         self.client = None
         self.session = requests.Session()
         
@@ -189,9 +191,15 @@ class YandexMusicDownloader:
             if not download_infos:
                 return None
             
-            # Priority order: mp3 > aac > other codecs
-            # Higher bitrate is better
-            codec_priority = {'mp3': 3, 'aac': 2, 'other': 1}
+            # First, try to find the preferred format
+            preferred_infos = [info for info in download_infos if info.codec == self.preferred_format]
+            if preferred_infos:
+                # If preferred format is available, get the highest bitrate version
+                return max(preferred_infos, key=lambda x: x.bitrate_in_kbps or 0)
+            
+            # If preferred format is not available, fall back to quality priority
+            # Priority order: flac > mp3 > aac > other codecs
+            codec_priority = {'flac': 4, 'mp3': 3, 'aac': 2, 'other': 1}
             
             best_info = max(download_infos, key=lambda x: (
                 codec_priority.get(x.codec, 0),
@@ -255,7 +263,15 @@ class YandexMusicDownloader:
             
             title = getattr(track_obj, 'title', 'Unknown Title') or 'Unknown Title'
             
-            filename = f"{artists} - {title}.mp3"
+            # Get download info first to determine the actual format
+            download_info = self.get_best_quality_download_info(track_obj.id)
+            if not download_info:
+                print(f"✗ Track {track_num}/{total_tracks}: No download info available")
+                return False
+            
+            # Use the actual format from download info for file extension
+            file_extension = download_info.codec if download_info.codec in ['mp3', 'flac', 'aac'] else 'mp3'
+            filename = f"{artists} - {title}.{file_extension}"
             filename = self.sanitize_filename(filename)
             filepath = self.output_dir / filename
             
@@ -263,12 +279,6 @@ class YandexMusicDownloader:
             if filepath.exists():
                 print(f"⏭ Track {track_num}/{total_tracks}: {filename} (already exists)")
                 return True
-            
-            # Get download info
-            download_info = self.get_best_quality_download_info(track_obj.id)
-            if not download_info:
-                print(f"✗ Track {track_num}/{total_tracks}: No download info available for {filename}")
-                return False
             
             # Get direct download link
             download_url = download_info.get_direct_link()
@@ -420,6 +430,7 @@ Examples:
   %(prog)s username:123
   %(prog)s liked --token YOUR_TOKEN
   %(prog)s https://music.yandex.ru/users/username/playlists/123 --output ./music --token YOUR_TOKEN
+  %(prog)s https://music.yandex.ru/users/username/playlists/123 --format flac --token YOUR_TOKEN
 
 Note: A token is required for accessing private playlists and liked tracks.
 Get your token from: https://yandex-music.readthedocs.io/en/main/token.html
@@ -443,6 +454,13 @@ Get your token from: https://yandex-music.readthedocs.io/en/main/token.html
     )
     
     parser.add_argument(
+        '--format', '-f',
+        choices=['mp3', 'flac', 'aac'],
+        default='mp3',
+        help='Preferred audio format (default: mp3). Will fallback to best available if preferred format is not available.'
+    )
+    
+    parser.add_argument(
         '--version',
         action='version',
         version='Yandex Music Downloader 1.0.0'
@@ -457,7 +475,7 @@ Get your token from: https://yandex-music.readthedocs.io/en/main/token.html
     print("=" * 40)
     
     # Initialize downloader
-    downloader = YandexMusicDownloader(token=token, output_dir=args.output)
+    downloader = YandexMusicDownloader(token=token, output_dir=args.output, preferred_format=args.format)
     
     # Authenticate
     if not downloader.authenticate():
