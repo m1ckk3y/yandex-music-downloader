@@ -1,13 +1,14 @@
 # Yandex Music Playlist Downloader
 
-A professional command-line application for downloading Yandex Music playlists in the highest available quality.
+A professional command-line application for downloading Yandex Music playlists with support for multiple audio formats including FLAC, MP3, and AAC.
 
 ## Features
 
 - 🎵 Download complete playlists from Yandex Music
 - 🎯 Support for playlist URLs, IDs, and liked tracks
-- 🔊 Automatically selects the highest quality available (MP3/AAC)
-- 📁 Saves all files in a single organized directory
+- 🎼 **Multiple format support**: FLAC, MP3, AAC with quality selection
+- 🔊 Smart format prioritization with fallback to best available quality
+- 📁 Saves all files in a single organized directory with proper extensions
 - 📊 Progress indicators and detailed logging
 - 🔐 OAuth token authentication support
 - 🛡️ Comprehensive error handling and recovery
@@ -92,14 +93,20 @@ python yandex_music_downloader.py "liked"
 ### Advanced Usage
 
 ```bash
+# Download in FLAC format (highest quality lossless)
+python yandex_music_downloader.py "https://music.yandex.ru/users/username/playlists/123" --format flac
+
+# Download in AAC format
+python yandex_music_downloader.py "username:123" --format aac
+
 # Specify custom output directory
 python yandex_music_downloader.py "https://music.yandex.ru/users/username/playlists/123" --output "./my_music"
 
 # Use token from command line
 python yandex_music_downloader.py "liked" --token "your_token_here"
 
-# Combine options
-python yandex_music_downloader.py "username:123" --output "./downloads" --token "your_token_here"
+# Combine all options
+python yandex_music_downloader.py "username:123" --format flac --output "./downloads" --token "your_token_here"
 ```
 
 ### Command Line Options
@@ -114,6 +121,8 @@ optional arguments:
                         Yandex Music OAuth token (required for private playlists and liked tracks)
   --output OUTPUT, -o OUTPUT
                         Output directory for downloaded files (default: downloads)
+  --format {mp3,flac,aac}, -f {mp3,flac,aac}
+                        Preferred audio format (default: mp3). Will fallback to best available if preferred format is not available.
   --version             Show program's version number and exit
 ```
 
@@ -139,30 +148,62 @@ python yandex_music_downloader.py "liked"
 python yandex_music_downloader.py "username:123" --output "./MyMusic"
 ```
 
+### Download in FLAC Format
+
+```bash
+# Download your liked tracks in FLAC format
+export YANDEX_MUSIC_TOKEN="your_token_here"
+python yandex_music_downloader.py "liked" --format flac
+
+# Download specific playlist in FLAC
+python yandex_music_downloader.py "https://music.yandex.ru/users/username/playlists/123" --format flac --token "your_token_here"
+```
+
 ## File Organization
 
 Downloaded files are organized as follows:
 
 ```
 downloads/
-├── Artist Name - Song Title.mp3
+├── Artist Name - Song Title.flac
 ├── Another Artist - Another Song.mp3
+├── Yet Another Artist - Title.aac
 ├── download.log
 └── ...
 ```
 
-- Files are named in the format: `Artist - Title.mp3`
+- Files are named in the format: `Artist - Title.{format}`
+- File extensions automatically match the downloaded format (`.flac`, `.mp3`, `.aac`)
 - Invalid characters in filenames are automatically sanitized
 - A log file tracks all download activities
 - Existing files are automatically skipped
 
-## Quality Selection
+## Format Selection & Quality
 
-The application automatically selects the highest quality available:
+The application supports multiple audio formats with intelligent quality selection:
 
-1. **Codec Priority**: MP3 > AAC > Others
-2. **Bitrate Priority**: Higher bitrate preferred
-3. **Typical Qualities**: 320kbps, 192kbps, 128kbps
+### Available Formats
+- **FLAC**: Lossless compression, highest quality (when available)
+- **MP3**: Lossy compression, widely compatible
+- **AAC**: Lossy compression, good quality-to-size ratio
+
+### Selection Logic
+1. **Preferred Format**: Downloads your specified format if available
+2. **Fallback Priority**: FLAC > MP3 > AAC > Other formats
+3. **Bitrate Priority**: Highest bitrate within chosen format
+4. **Typical Qualities**: FLAC (lossless), MP3/AAC (320kbps, 192kbps, 128kbps)
+
+### Usage Examples
+```bash
+# Download in FLAC (lossless) when available
+python yandex_music_downloader.py playlist_url --format flac
+
+# Download in MP3 (default)
+python yandex_music_downloader.py playlist_url --format mp3
+
+# Download in AAC
+python yandex_music_downloader.py playlist_url --format aac
+```
 
 ## Error Handling
 
@@ -247,8 +288,9 @@ The application includes built-in rate limiting:
 
 ### Supported Formats
 
-- **Audio Formats**: MP3, AAC
-- **Quality Range**: 128kbps to 320kbps
+- **Audio Formats**: FLAC (lossless), MP3, AAC
+- **Quality Range**: FLAC (lossless), MP3/AAC (128kbps to 320kbps)
+- **Format Selection**: User-selectable with intelligent fallback
 - **Metadata**: Artist, title, album information preserved
 
 ## Contributing
@@ -265,6 +307,13 @@ This is an open-source project. Contributions are welcome:
 This project is licensed under the MIT License. See the LICENSE file for details.
 
 ## Version History
+
+- **v1.1.0**: FLAC support and format selection
+  - Added FLAC download support
+  - Implemented format selection (--format option)
+  - Smart quality prioritization with fallback
+  - Proper file extensions based on actual format
+  - Enhanced quality selection logic
 
 - **v1.0.0**: Initial release with core functionality
   - Playlist downloading
