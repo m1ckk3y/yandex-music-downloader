@@ -88,9 +88,15 @@ class YandexMusicDownloader:
                 
         except UnauthorizedError:
             print("✗ Authentication failed: Invalid token")
+            print("💡 Get your token from: https://yandex-music.readthedocs.io/en/main/token.html")
+            return False
+        except (NetworkError, requests.exceptions.RequestException, requests.exceptions.ConnectionError) as e:
+            print(f"✗ Network error during authentication: {e}")
+            print("💡 Check your internet connection and try again")
             return False
         except Exception as e:
             print(f"✗ Authentication error: {e}")
+            self.logger.error(f"Authentication error: {e}")
             return False
     
     def extract_playlist_id(self, url_or_id: str) -> Optional[Tuple[str, str]]:
@@ -132,27 +138,64 @@ class YandexMusicDownloader:
             # Handle special cases
             if playlist_identifier.lower() in ['liked', 'favorites', 'my']:
                 print("Getting your liked tracks...")
-                return self.client.users_likes_tracks()
+                try:
+                    liked_tracks = self.client.users_likes_tracks()
+                    if liked_tracks:
+                        print(f"✓ Found {len(liked_tracks.track_ids)} liked tracks")
+                        return liked_tracks
+                    else:
+                        print("✗ No liked tracks found")
+                        return None
+                except Exception as e:
+                    print(f"✗ Error getting liked tracks: {e}")
+                    self.logger.error(f"Error getting liked tracks: {e}")
+                    return None
             
             # Extract playlist ID from URL or use direct ID
             playlist_info = self.extract_playlist_id(playlist_identifier)
             if not playlist_info:
                 print(f"✗ Invalid playlist URL or ID: {playlist_identifier}")
+                print("Valid formats:")
+                print("  - https://music.yandex.ru/users/username/playlists/123")
+                print("  - username:123")
+                print("  - 'liked' for your liked tracks")
                 return None
             
             owner, playlist_id = playlist_info
             print(f"Getting playlist {playlist_id} from user {owner}...")
             
-            playlist = self.client.users_playlists(playlist_id, owner)
-            if playlist:
-                print(f"✓ Found playlist: {playlist.title} ({len(playlist.tracks)} tracks)")
-                return playlist
-            else:
-                print("✗ Playlist not found or not accessible")
+            try:
+                playlist = self.client.users_playlists(playlist_id, owner)
+                if playlist:
+                    track_count = len(playlist.tracks) if hasattr(playlist, 'tracks') and playlist.tracks else 0
+                    print(f"✓ Found playlist: {playlist.title} ({track_count} tracks)")
+                    return playlist
+                else:
+                    print("✗ Playlist not found or not accessible")
+                    return None
+            except Exception as playlist_error:
+                # Handle specific Yandex Music API errors
+                error_msg = str(playlist_error)
+                if 'playlist-not-found' in error_msg:
+                    print(f"✗ Playlist not found: {owner}:{playlist_id}")
+                    print("This could mean:")
+                    print("  - The playlist doesn't exist")
+                    print("  - The playlist is private and you don't have access")
+                    print("  - The owner username is incorrect")
+                elif 'not-found' in error_msg:
+                    print(f"✗ User '{owner}' not found")
+                elif 'access-denied' in error_msg or 'forbidden' in error_msg:
+                    print(f"✗ Access denied to playlist {owner}:{playlist_id}")
+                    print("This playlist might be private")
+                else:
+                    print(f"✗ Error accessing playlist: {playlist_error}")
+                
+                self.logger.error(f"Error getting playlist {owner}:{playlist_id}: {playlist_error}")
                 return None
                 
         except Exception as e:
-            print(f"✗ Error getting playlist: {e}")
+            print(f"✗ Unexpected error getting playlist: {e}")
+            self.logger.error(f"Unexpected error getting playlist: {e}")
             return None
     
     def sanitize_filename(self, filename: str) -> str:
@@ -176,41 +219,54 @@ class YandexMusicDownloader:
         
         return filename.strip()
     
-    def get_best_quality_download_info(self, track_id: str):
+    def get_best_quality_download_info(self, track_id: str, max_retries: int = 3):
         """
         Get the best quality download information for a track.
         
         Args:
             track_id: Track ID
+            max_retries: Maximum number of retry attempts
             
         Returns:
             Download info object or None
         """
-        try:
-            download_infos = self.client.tracks_download_info(track_id)
-            if not download_infos:
+        for attempt in range(max_retries):
+            try:
+                download_infos = self.client.tracks_download_info(track_id)
+                if not download_infos:
+                    return None
+                
+                # First, try to find the preferred format
+                preferred_infos = [info for info in download_infos if info.codec == self.preferred_format]
+                if preferred_infos:
+                    # If preferred format is available, get the highest bitrate version
+                    return max(preferred_infos, key=lambda x: x.bitrate_in_kbps or 0)
+                
+                # If preferred format is not available, fall back to quality priority
+                # Priority order: flac > mp3 > aac > other codecs
+                codec_priority = {'flac': 4, 'mp3': 3, 'aac': 2, 'other': 1}
+                
+                best_info = max(download_infos, key=lambda x: (
+                    codec_priority.get(x.codec, 0),
+                    x.bitrate_in_kbps or 0
+                ))
+                
+                return best_info
+                
+            except (NetworkError, requests.exceptions.RequestException, requests.exceptions.Timeout) as e:
+                if attempt < max_retries - 1:
+                    wait_time = 2 ** attempt  # Exponential backoff
+                    print(f"⚠️  Network error getting download info for track {track_id}, retrying in {wait_time}s... (attempt {attempt + 1}/{max_retries})")
+                    time.sleep(wait_time)
+                    continue
+                else:
+                    self.logger.error(f"Network error getting download info for track {track_id} after {max_retries} attempts: {e}")
+                    return None
+            except Exception as e:
+                self.logger.error(f"Error getting download info for track {track_id}: {e}")
                 return None
-            
-            # First, try to find the preferred format
-            preferred_infos = [info for info in download_infos if info.codec == self.preferred_format]
-            if preferred_infos:
-                # If preferred format is available, get the highest bitrate version
-                return max(preferred_infos, key=lambda x: x.bitrate_in_kbps or 0)
-            
-            # If preferred format is not available, fall back to quality priority
-            # Priority order: flac > mp3 > aac > other codecs
-            codec_priority = {'flac': 4, 'mp3': 3, 'aac': 2, 'other': 1}
-            
-            best_info = max(download_infos, key=lambda x: (
-                codec_priority.get(x.codec, 0),
-                x.bitrate_in_kbps or 0
-            ))
-            
-            return best_info
-            
-        except Exception as e:
-            self.logger.error(f"Error getting download info for track {track_id}: {e}")
-            return None
+        
+        return None
     
     def download_track(self, track, track_num: int = 0, total_tracks: int = 0) -> bool:
         """
