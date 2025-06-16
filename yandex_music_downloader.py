@@ -217,19 +217,43 @@ class YandexMusicDownloader:
             True if download successful, False otherwise
         """
         try:
-            # Get track info
-            if hasattr(track, 'track'):
-                track_obj = track.track
-            else:
-                track_obj = track
+            # Get track info - handle different track object structures
+            track_obj = None
             
-            if not track_obj:
-                print(f"✗ Track {track_num}: Invalid track object")
+            if track is None:
+                print(f"✗ Track {track_num}/{total_tracks}: Track object is None")
+                return False
+            
+            # Handle different track object types
+            if hasattr(track, 'track') and track.track is not None:
+                track_obj = track.track
+            elif hasattr(track, 'id') and hasattr(track, 'title'):
+                # Direct track object
+                track_obj = track
+            elif hasattr(track, 'track_id'):
+                # Track reference - need to fetch the actual track
+                try:
+                    track_obj = self.client.tracks([track.track_id])[0]
+                except Exception as e:
+                    print(f"✗ Track {track_num}/{total_tracks}: Could not fetch track details: {e}")
+                    return False
+            else:
+                print(f"✗ Track {track_num}/{total_tracks}: Unknown track object type: {type(track)}")
+                return False
+            
+            if not track_obj or not hasattr(track_obj, 'id'):
+                print(f"✗ Track {track_num}/{total_tracks}: Invalid track object after processing")
                 return False
             
             # Create filename
-            artists = ', '.join([artist.name for artist in track_obj.artists]) if track_obj.artists else 'Unknown Artist'
-            title = track_obj.title or 'Unknown Title'
+            artists = 'Unknown Artist'
+            if hasattr(track_obj, 'artists') and track_obj.artists:
+                try:
+                    artists = ', '.join([artist.name for artist in track_obj.artists if hasattr(artist, 'name')])
+                except Exception:
+                    artists = 'Unknown Artist'
+            
+            title = getattr(track_obj, 'title', 'Unknown Title') or 'Unknown Title'
             
             filename = f"{artists} - {title}.mp3"
             filename = self.sanitize_filename(filename)
@@ -326,9 +350,42 @@ class YandexMusicDownloader:
             # Download tracks
             successful_downloads = 0
             failed_downloads = 0
+            skipped_tracks = 0
             
-            for i, track in enumerate(tracks, 1):
-                if self.download_track(track, i, len(tracks)):
+            # Filter out invalid tracks before processing
+            valid_tracks = []
+            for track in tracks:
+                if track is None:
+                    skipped_tracks += 1
+                    continue
+                
+                # Check if track has required attributes
+                track_obj = None
+                if hasattr(track, 'track') and track.track is not None:
+                    track_obj = track.track
+                elif hasattr(track, 'id'):
+                    track_obj = track
+                elif hasattr(track, 'track_id'):
+                    # This will be handled in download_track
+                    track_obj = track
+                
+                if track_obj is None:
+                    skipped_tracks += 1
+                    continue
+                    
+                valid_tracks.append(track)
+            
+            if skipped_tracks > 0:
+                print(f"⚠️  Skipped {skipped_tracks} invalid track objects")
+            
+            if not valid_tracks:
+                print("✗ No valid tracks found in playlist")
+                return False
+            
+            print(f"\n🎵 Processing {len(valid_tracks)} valid tracks (skipped {skipped_tracks} invalid)...")
+            
+            for i, track in enumerate(valid_tracks, 1):
+                if self.download_track(track, i, len(valid_tracks)):
                     successful_downloads += 1
                 else:
                     failed_downloads += 1
@@ -340,6 +397,8 @@ class YandexMusicDownloader:
             print(f"\n📊 Download Summary:")
             print(f"✓ Successful: {successful_downloads}")
             print(f"✗ Failed: {failed_downloads}")
+            if skipped_tracks > 0:
+                print(f"⏭️ Skipped: {skipped_tracks} (invalid track objects)")
             print(f"📁 Files saved to: {self.output_dir.absolute()}")
             
             return successful_downloads > 0
