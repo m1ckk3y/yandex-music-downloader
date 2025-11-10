@@ -25,7 +25,7 @@ def register_view(request):
     else:
         form = RegistrationForm()
     
-    return render(request, 'music/register.html', {'form': form})
+    return render(request, 'music_downloader/register.html', {'form': form})
 
 
 def login_view(request):
@@ -45,7 +45,7 @@ def login_view(request):
         else:
             messages.error(request, 'Неверное имя пользователя или пароль')
     
-    return render(request, 'music/login.html')
+    return render(request, 'music_downloader/login.html')
 
 
 @login_required
@@ -72,7 +72,7 @@ def home_view(request):
         'has_token': bool(profile.yandex_token)
     }
     
-    return render(request, 'music/home.html', context)
+    return render(request, 'music_downloader/home.html', context)
 
 
 @login_required
@@ -92,7 +92,7 @@ def profile_view(request):
     else:
         form = ProfileUpdateForm(instance=profile)
     
-    return render(request, 'music/profile.html', {'form': form, 'profile': profile})
+    return render(request, 'music_downloader/profile.html', {'form': form, 'profile': profile})
 
 
 @login_required
@@ -121,7 +121,7 @@ def load_playlist_view(request):
     else:
         form = PlaylistLoadForm()
     
-    return render(request, 'music/load_playlist.html', {'form': form})
+    return render(request, 'music_downloader/load_playlist.html', {'form': form})
 
 
 @login_required
@@ -132,7 +132,7 @@ def playlist_loading_view(request):
         messages.error(request, 'Не указан URL плейлиста')
         return redirect('load_playlist')
     
-    return render(request, 'music/playlist_loading.html', {'playlist_url': playlist_url})
+    return render(request, 'music_downloader/playlist_loading.html', {'playlist_url': playlist_url})
 
 
 @login_required  
@@ -259,7 +259,7 @@ def playlist_preview_view(request, playlist_id):
         'total_tracks': tracks.count()
     }
     
-    return render(request, 'music/playlist_preview.html', context)
+    return render(request, 'music_downloader/playlist_preview.html', context)
 
 
 @login_required
@@ -290,7 +290,7 @@ def download_progress_view(request):
         messages.error(request, 'Нет активной задачи скачивания')
         return redirect('home')
     
-    return render(request, 'music/download_progress.html', {})
+    return render(request, 'music_downloader/download_progress.html', {})
 
 
 @login_required
@@ -348,7 +348,7 @@ def downloaded_playlists_view(request):
         'downloaded_playlists': downloaded_playlists
     }
     
-    return render(request, 'music/downloaded_playlists.html', context)
+    return render(request, 'music_downloader/downloaded_playlists.html', context)
 
 
 @login_required
@@ -362,7 +362,7 @@ def downloaded_playlist_detail_view(request, playlist_id):
         'tracks': tracks
     }
     
-    return render(request, 'music/downloaded_playlist_detail.html', context)
+    return render(request, 'music_downloader/downloaded_playlist_detail.html', context)
 
 
 @login_required
