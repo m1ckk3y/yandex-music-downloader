@@ -1,0 +1,50 @@
+{% extends 'music_downloader/base.html' %}
+
+{% block title %}Профиль - Yandex Music Downloader{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h4 class="mb-0"><i class="bi bi-person-circle"></i> Профиль пользователя</h4>
+            </div>
+            <div class="card-body">
+                <div class="mb-4">
+                    <h5>Информация о пользователе</h5>
+                    <p><strong>Имя пользователя:</strong> {{ user.username }}</p>
+                    <p><strong>Email:</strong> {{ user.email }}</p>
+                    <p><strong>Дата регистрации:</strong> {{ user.date_joined|date:"d.m.Y H:i" }}</p>
+                </div>
+                
+                <hr>
+                
+                <h5>Настройки Yandex Music</h5>
+                <form method="post">
+                    {% csrf_token %}
+                    <div class="mb-3">
+                        {{ form.yandex_token.label_tag }}
+                        {{ form.yandex_token }}
+                        <small class="form-text text-muted">
+                            Получите токен по инструкции: 
+                            <a href="https://yandex-music.readthedocs.io/en/main/token.html" target="_blank">
+                                https://yandex-music.readthedocs.io/en/main/token.html
+                            </a>
+                        </small>
+                        {% if form.yandex_token.errors %}
+                            <div class="text-danger">{{ form.yandex_token.errors }}</div>
+                        {% endif %}
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-save"></i> Сохранить
+                    </button>
+                    <a href="{% url 'home' %}" class="btn btn-secondary">
+                        <i class="bi bi-x"></i> Отмена
+                    </a>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

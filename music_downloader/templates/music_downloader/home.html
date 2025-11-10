@@ -1,0 +1,80 @@
+{% extends 'music_downloader/base.html' %}
+
+{% block title %}Главная - Yandex Music Downloader{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="card mb-4">
+            <div class="card-body text-center">
+                <h1><i class="bi bi-music-note-beamed"></i> Добро пожаловать, {{ user.username }}!</h1>
+                <p class="lead">Скачивайте плейлисты из Yandex Music в высоком качестве</p>
+                
+                {% if not has_token %}
+                <div class="alert alert-warning">
+                    <i class="bi bi-exclamation-triangle"></i> 
+                    У вас не установлен токен Yandex Music. 
+                    <a href="{% url 'profile' %}" class="alert-link">Добавьте токен</a> для работы с приложением.
+                </div>
+                {% endif %}
+                
+                <div class="d-grid gap-2 d-md-block">
+                    <a href="{% url 'load_playlist' %}" class="btn btn-primary btn-lg">
+                        <i class="bi bi-plus-circle"></i> Загрузить плейлист
+                    </a>
+                    <a href="{% url 'downloaded_playlists' %}" class="btn btn-success btn-lg">
+                        <i class="bi bi-download"></i> Скачанные плейлисты
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header bg-secondary text-white">
+                <h4 class="mb-0"><i class="bi bi-list"></i> Мои плейлисты</h4>
+            </div>
+            <div class="card-body">
+                {% if playlists %}
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Название</th>
+                                <th>Количество треков</th>
+                                <th>Дата добавления</th>
+                                <th>Действия</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for playlist in playlists %}
+                            <tr>
+                                <td><i class="bi bi-music-note-list"></i> {{ playlist.title }}</td>
+                                <td>{{ playlist.track_count }}</td>
+                                <td>{{ playlist.created_at|date:"d.m.Y H:i" }}</td>
+                                <td>
+                                    <a href="{% url 'playlist_preview' playlist.id %}" class="btn btn-sm btn-primary">
+                                        <i class="bi bi-eye"></i> Просмотр
+                                    </a>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <p class="text-center text-muted">У вас пока нет загруженных плейлистов</p>
+                <div class="text-center">
+                    <a href="{% url 'load_playlist' %}" class="btn btn-primary">
+                        <i class="bi bi-plus-circle"></i> Загрузить первый плейлист
+                    </a>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

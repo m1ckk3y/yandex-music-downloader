@@ -1,0 +1,46 @@
+{% extends 'music_downloader/base.html' %}
+
+{% block title %}Загрузить плейлист - Yandex Music Downloader{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h4 class="mb-0"><i class="bi bi-plus-circle"></i> Загрузить плейлист</h4>
+            </div>
+            <div class="card-body">
+                <form method="post">
+                    {% csrf_token %}
+                    <div class="mb-3">
+                        {{ form.playlist_url.label_tag }}
+                        {{ form.playlist_url }}
+                        <small class="form-text text-muted">{{ form.playlist_url.help_text }}</small>
+                        {% if form.playlist_url.errors %}
+                            <div class="text-danger">{{ form.playlist_url.errors }}</div>
+                        {% endif %}
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-download"></i> Загрузить
+                    </button>
+                    <a href="{% url 'home' %}" class="btn btn-secondary">
+                        <i class="bi bi-arrow-left"></i> Назад
+                    </a>
+                </form>
+                
+                <hr>
+                
+                <div class="alert alert-info">
+                    <h5><i class="bi bi-info-circle"></i> Примеры форматов URL:</h5>
+                    <ul>
+                        <li><code>https://music.yandex.ru/users/username/playlists/123</code></li>
+                        <li><code>username:123</code></li>
+                        <li><code>liked</code> - для ваших любимых треков</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

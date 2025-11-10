@@ -1,0 +1,51 @@
+{% extends 'music_downloader/base.html' %}
+
+{% block title %}Скачанные плейлисты - Yandex Music Downloader{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header bg-success text-white">
+                <h4 class="mb-0"><i class="bi bi-download"></i> Скачанные плейлисты</h4>
+            </div>
+            <div class="card-body">
+                {% if downloaded_playlists %}
+                <div class="row">
+                    {% for playlist in downloaded_playlists %}
+                    <div class="col-md-6 col-lg-4 mb-4">
+                        <div class="card h-100">
+                            <div class="card-body">
+                                <h5 class="card-title"><i class="bi bi-music-note-list"></i> {{ playlist.title }}</h5>
+                                <p class="card-text">
+                                    <small class="text-muted">
+                                        <i class="bi bi-calendar"></i> {{ playlist.download_date|date:"d.m.Y H:i" }}
+                                    </small>
+                                </p>
+                                <p class="card-text">
+                                    <i class="bi bi-file-music"></i> Треков: {{ playlist.tracks_count }}
+                                </p>
+                            </div>
+                            <div class="card-footer">
+                                <a href="{% url 'downloaded_playlist_detail' playlist.id %}" class="btn btn-primary btn-sm w-100">
+                                    <i class="bi bi-eye"></i> Просмотреть
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="text-center py-5">
+                    <i class="bi bi-inbox" style="font-size: 4rem; color: #ccc;"></i>
+                    <p class="lead text-muted mt-3">У вас пока нет скачанных плейлистов</p>
+                    <a href="{% url 'load_playlist' %}" class="btn btn-primary">
+                        <i class="bi bi-plus-circle"></i> Загрузить плейлист
+                    </a>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,177 @@
+{% extends 'music_downloader/base.html' %}
+
+{% block title %}Загрузка плейлиста - Yandex Music Downloader{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h4 class="mb-0"><i class="bi bi-download"></i> Загрузка плейлиста</h4>
+            </div>
+            <div class="card-body text-center py-5">
+                <div id="loading-container">
+                    <div class="mb-4">
+                        <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;">
+                            <span class="visually-hidden">Загрузка...</span>
+                        </div>
+                    </div>
+                    
+                    <h5 id="status-message" class="mb-4">Подготовка к загрузке...</h5>
+                    
+                    <div class="progress mb-3" style="height: 30px;">
+                        <div id="progress-bar" class="progress-bar progress-bar-striped progress-bar-animated bg-success" 
+                             role="progressbar" style="width: 0%" 
+                             aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
+                            0%
+                        </div>
+                    </div>
+                    
+                    <p id="tracks-info" class="text-muted"></p>
+                    
+                    <div id="console-output" class="mt-4 p-3 bg-light rounded text-start" style="max-height: 200px; overflow-y: auto; font-family: monospace; font-size: 12px; display: none;">
+                    </div>
+                </div>
+                
+                <div id="error-container" style="display: none;">
+                    <i class="bi bi-exclamation-triangle text-danger" style="font-size: 3rem;"></i>
+                    <h5 class="text-danger mt-3" id="error-message"></h5>
+                    <a href="{% url 'load_playlist' %}" class="btn btn-primary mt-3">
+                        <i class="bi bi-arrow-left"></i> Попробовать снова
+                    </a>
+                </div>
+                
+                <div id="success-container" style="display: none;">
+                    <i class="bi bi-check-circle text-success" style="font-size: 3rem;"></i>
+                    <h5 class="text-success mt-3">Плейлист успешно загружен!</h5>
+                    <p id="success-message"></p>
+                    <button id="view-playlist-btn" class="btn btn-success btn-lg mt-3">
+                        <i class="bi bi-eye"></i> Просмотреть плейлист
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let playlistId = null;
+let consoleLines = [];
+
+function addConsoleLog(message) {
+    consoleLines.push(message);
+    const consoleOutput = document.getElementById('console-output');
+    consoleOutput.style.display = 'block';
+    consoleOutput.innerHTML = consoleLines.join('\n');
+    consoleOutput.scrollTop = consoleOutput.scrollHeight;
+}
+
+function updateProgress(current, total, message) {
+    const percentage = total > 0 ? Math.round((current / total) * 100) : 0;
+    const progressBar = document.getElementById('progress-bar');
+    const statusMessage = document.getElementById('status-message');
+    const tracksInfo = document.getElementById('tracks-info');
+    
+    progressBar.style.width = percentage + '%';
+    progressBar.setAttribute('aria-valuenow', percentage);
+    progressBar.textContent = percentage + '%';
+    
+    statusMessage.textContent = message || 'Загрузка...';
+    tracksInfo.textContent = total > 0 ? `Треков: ${current} / ${total}` : '';
+    
+    addConsoleLog(`[${new Date().toLocaleTimeString()}] ${message} (${current}/${total})`);
+}
+
+function showError(message) {
+    document.getElementById('loading-container').style.display = 'none';
+    document.getElementById('error-container').style.display = 'block';
+    document.getElementById('error-message').textContent = message;
+    addConsoleLog(`[ОШИБКА] ${message}`);
+}
+
+function showSuccess(tracksLoaded, totalTracks, id) {
+    playlistId = id;
+    document.getElementById('loading-container').style.display = 'none';
+    document.getElementById('success-container').style.display = 'block';
+    document.getElementById('success-message').textContent = 
+        `Загружено ${tracksLoaded} из ${totalTracks} треков`;
+    
+    document.getElementById('view-playlist-btn').addEventListener('click', function() {
+        window.location.href = `/playlist/${playlistId}/preview/`;
+    });
+    
+    addConsoleLog(`[УСПЕХ] Загружено ${tracksLoaded} треков`);
+}
+
+let progressInterval = null;
+
+async function checkProgress() {
+    try {
+        const response = await fetch('{% url "playlist_progress_api" %}');
+        if (response.ok) {
+            const progress = await response.json();
+            
+            if (progress.status === 'loading') {
+                updateProgress(progress.current, progress.total, progress.message || 'Загрузка...');
+            }
+        }
+    } catch (error) {
+        console.error('Error checking progress:', error);
+    }
+}
+
+async function loadPlaylist() {
+    try {
+        addConsoleLog('[START] Начало загрузки плейлиста...');
+        updateProgress(0, 100, 'Отправка запроса на сервер...');
+        
+        // Запускаем периодическую проверку прогресса
+        progressInterval = setInterval(checkProgress, 1000);
+        
+        const response = await fetch('{% url "playlist_load_api" %}', {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': '{{ csrf_token }}',
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        // Останавливаем проверку прогресса
+        if (progressInterval) {
+            clearInterval(progressInterval);
+            progressInterval = null;
+        }
+        
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.error || 'Ошибка загрузки');
+        }
+        
+        const result = await response.json();
+        
+        if (result.status === 'success') {
+            showSuccess(result.tracks_loaded, result.total_tracks, result.playlist_id);
+        } else {
+            throw new Error('Неизвестная ошибка');
+        }
+        
+    } catch (error) {
+        console.error('Error:', error);
+        if (progressInterval) {
+            clearInterval(progressInterval);
+            progressInterval = null;
+        }
+        showError(error.message || 'Произошла ошибка при загрузке плейлиста');
+    }
+}
+
+// Запускаем загрузку при загрузке страницы
+document.addEventListener('DOMContentLoaded', function() {
+    addConsoleLog('[INIT] Инициализация загрузки...');
+    setTimeout(loadPlaylist, 500);
+});
+</script>
+{% endblock %}

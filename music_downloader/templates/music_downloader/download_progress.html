@@ -1,0 +1,166 @@
+{% extends 'music_downloader/base.html' %}
+
+{% block title %}Скачивание треков{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card shadow-sm">
+            <div class="card-body text-center">
+                <h3 class="mb-4">Скачивание треков</h3>
+                
+                <div id="loading-spinner" class="mb-4">
+                    <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;">
+                        <span class="visually-hidden">Загрузка...</span>
+                    </div>
+                </div>
+                
+                <div id="progress-message" class="mb-3 text-muted">
+                    Подготовка к скачиванию...
+                </div>
+                
+                <div class="progress mb-3" style="height: 30px;">
+                    <div id="progress-bar" class="progress-bar progress-bar-striped progress-bar-animated" 
+                         role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
+                        0%
+                    </div>
+                </div>
+                
+                <div id="track-count" class="text-muted">
+                    0 / 0 треков
+                </div>
+                
+                <div id="error-message" class="alert alert-danger mt-3" style="display: none;"></div>
+                
+                <div id="success-message" class="alert alert-success mt-3" style="display: none;">
+                    <h5>✓ Скачивание завершено!</h5>
+                    <p class="mb-0">Треки успешно скачаны</p>
+                    <a href="{% url 'downloaded_playlists' %}" class="btn btn-success mt-3">
+                        Перейти к скачанным плейлистам
+                    </a>
+                </div>
+            </div>
+        </div>
+        
+        <div id="console-output" class="card shadow-sm mt-3" style="display: none;">
+            <div class="card-header">
+                <h5 class="mb-0">Детали скачивания</h5>
+            </div>
+            <div class="card-body">
+                <pre id="console-log" class="mb-0" style="max-height: 300px; overflow-y: auto; font-size: 0.85rem;"></pre>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let downloadStarted = false;
+let pollingInterval = null;
+let consoleLog = [];
+
+function addLog(message) {
+    const timestamp = new Date().toLocaleTimeString();
+    consoleLog.push(`[${timestamp}] ${message}`);
+    document.getElementById('console-log').textContent = consoleLog.join('\n');
+    document.getElementById('console-output').style.display = 'block';
+    
+    // Прокручиваем вниз
+    const consoleElement = document.getElementById('console-log');
+    consoleElement.scrollTop = consoleElement.scrollHeight;
+}
+
+function updateProgress(data) {
+    const progressBar = document.getElementById('progress-bar');
+    const progressMessage = document.getElementById('progress-message');
+    const trackCount = document.getElementById('track-count');
+    
+    const percentage = data.total > 0 ? Math.round((data.current / data.total) * 100) : 0;
+    
+    progressBar.style.width = percentage + '%';
+    progressBar.textContent = percentage + '%';
+    progressBar.setAttribute('aria-valuenow', percentage);
+    
+    if (data.message) {
+        progressMessage.textContent = data.message;
+        addLog(data.message);
+    }
+    
+    trackCount.textContent = `${data.current} / ${data.total} треков`;
+}
+
+function startDownload() {
+    if (downloadStarted) return;
+    downloadStarted = true;
+    
+    addLog('Запуск скачивания треков...');
+    
+    fetch('{% url "download_start_api" %}', {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': '{{ csrf_token }}',
+            'Content-Type': 'application/json'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.status === 'success') {
+            addLog('Скачивание успешно завершено!');
+            document.getElementById('loading-spinner').style.display = 'none';
+            document.getElementById('success-message').style.display = 'block';
+            clearInterval(pollingInterval);
+        } else if (data.error) {
+            throw new Error(data.error);
+        }
+    })
+    .catch(error => {
+        console.error('Download error:', error);
+        addLog('Ошибка: ' + error.message);
+        document.getElementById('error-message').textContent = 'Ошибка скачивания: ' + error.message;
+        document.getElementById('error-message').style.display = 'block';
+        document.getElementById('loading-spinner').style.display = 'none';
+        clearInterval(pollingInterval);
+    });
+}
+
+function checkProgress() {
+    fetch('{% url "download_progress_api" %}')
+        .then(response => response.json())
+        .then(data => {
+            console.log('Progress:', data);
+            
+            if (data.status === 'pending') {
+                // Еще не началось
+                return;
+            } else if (data.status === 'loading' || data.status === 'downloading') {
+                updateProgress(data);
+            } else if (data.status === 'completed') {
+                updateProgress(data);
+                document.getElementById('loading-spinner').style.display = 'none';
+                document.getElementById('success-message').style.display = 'block';
+                clearInterval(pollingInterval);
+                addLog('✓ Скачивание завершено!');
+            } else if (data.status === 'error') {
+                document.getElementById('error-message').textContent = 'Ошибка: ' + data.message;
+                document.getElementById('error-message').style.display = 'block';
+                document.getElementById('loading-spinner').style.display = 'none';
+                clearInterval(pollingInterval);
+                addLog('✗ Ошибка: ' + data.message);
+            }
+        })
+        .catch(error => {
+            console.error('Progress check error:', error);
+        });
+}
+
+// Запускаем скачивание при загрузке страницы
+window.addEventListener('DOMContentLoaded', function() {
+    addLog('Инициализация скачивания...');
+    
+    // Начинаем опрос прогресса
+    pollingInterval = setInterval(checkProgress, 1000);
+    
+    // Запускаем скачивание
+    setTimeout(startDownload, 500);
+});
+</script>
+{% endblock %}
