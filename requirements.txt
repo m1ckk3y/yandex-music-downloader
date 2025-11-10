@@ -1,5 +1,8 @@
 # Yandex Music Downloader Dependencies
 
+# Django framework
+Django>=5.0.0
+
 # Core library for Yandex Music API
 yandex-music>=2.2.0
 
