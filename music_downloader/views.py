@@ -380,3 +380,43 @@ def download_file_view(request, track_id):
         raise Http404("Файл не найден")
     
     return FileResponse(open(file_path, 'rb'), as_attachment=True, filename=file_path.name)
+
+
+@login_required
+def delete_downloaded_playlist_view(request, playlist_id):
+    """Удаление скачанного плейлиста"""
+    downloaded_playlist = get_object_or_404(DownloadedPlaylist, id=playlist_id, user=request.user)
+    
+    if request.method == 'POST':
+        # Удаляем файлы треков
+        import shutil
+        media_root = Path(settings.MEDIA_ROOT)
+        
+        for track in downloaded_playlist.tracks.all():
+            file_path = media_root / track.file_path
+            if file_path.exists():
+                try:
+                    file_path.unlink()
+                except Exception as e:
+                    print(f"Error deleting file {file_path}: {e}")
+        
+        # Пытаемся удалить директорию плейлиста (если пустая)
+        if downloaded_playlist.playlist:
+            playlist_dir = media_root / f"user_{request.user.id}" / f"playlist_{downloaded_playlist.playlist.id}_{downloaded_playlist.playlist.yandex_playlist_id}"
+            if playlist_dir.exists():
+                try:
+                    # Удаляем директорию только если она пустая или содержит только удаленные файлы
+                    if not any(playlist_dir.iterdir()):
+                        playlist_dir.rmdir()
+                except Exception as e:
+                    print(f"Error removing directory {playlist_dir}: {e}")
+        
+        # Удаляем запись из базы данных
+        playlist_title = downloaded_playlist.title
+        downloaded_playlist.delete()
+        
+        messages.success(request, f'Плейлист "{playlist_title}" успешно удален')
+        return redirect('downloaded_playlists')
+    
+    # Для GET запроса возвращаем на страницу плейлиста
+    return redirect('downloaded_playlist_detail', playlist_id=playlist_id)
