@@ -32,52 +32,7 @@ class YandexMusicService(YandexMusicCore):
             }
             self.django_session.save()
     
-    def authenticate(self) -> Tuple[bool, str]:
-        """
-        Аутентификация в Yandex Music
-        
-        Returns:
-            Tuple[bool, str]: (успех, сообщение)
-        """
-        try:
-            if not self.token:
-                return False, "Токен не предоставлен"
-            
-            self.client = Client(self.token).init()
-            account_info = self.client.account_status()
-            
-            if account_info:
-                return True, f"Успешная авторизация как {account_info.account.display_name}"
-            else:
-                return False, "Не удалось получить информацию об аккаунте"
-        
-        except UnauthorizedError:
-            return False, "Неверный токен"
-        except NetworkError:
-            return False, "Ошибка сети"
-        except Exception as e:
-            return False, f"Ошибка аутентификации: {str(e)}"
-    
-    def extract_playlist_id(self, url_or_id: str) -> Optional[Tuple[str, str]]:
-        """
-        Извлечь ID плейлиста из URL
-        
-        Returns:
-            Tuple[owner, playlist_id] или None
-        """
-        import re
-        url_pattern = r'https?://music\.yandex\.[a-z]+/users/([^/]+)/playlists/(\d+)'
-        match = re.search(url_pattern, url_or_id)
-        
-        if match:
-            return match.group(1), match.group(2)
-        
-        if ':' in url_or_id:
-            parts = url_or_id.split(':')
-            if len(parts) == 2:
-                return parts[0], parts[1]
-        
-        return None
+    # authenticate() and extract_playlist_id() inherited from YandexMusicCore
     
     def get_playlist_info(self, playlist_identifier: str) -> Optional[Dict]:
         """
