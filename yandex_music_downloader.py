@@ -12,25 +12,18 @@ License: MIT
 import argparse
 import os
 import sys
-import re
 import time
 from pathlib import Path
-from typing import List, Optional, Tuple
-import requests
+from typing import List, Optional
 from tqdm import tqdm
 import logging
 
-try:
-    from yandex_music import Client
-    from yandex_music.exceptions import YandexMusicError, NetworkError, UnauthorizedError
-except ImportError:
-    print("Error: yandex-music library not found. Please install it using:")
-    print("pip install -r requirements.txt")
-    sys.exit(1)
+# Import shared core functionality
+from core import YandexMusicCore
 
 
-class YandexMusicDownloader:
-    """Main class for downloading Yandex Music playlists."""
+class YandexMusicDownloader(YandexMusicCore):
+    """CLI wrapper for downloading Yandex Music playlists."""
     
     def __init__(self, token: Optional[str] = None, output_dir: str = "downloads", preferred_format: str = "mp3"):
         """
@@ -41,11 +34,8 @@ class YandexMusicDownloader:
             output_dir: Directory to save downloaded files
             preferred_format: Preferred audio format (mp3, flac, aac)
         """
-        self.token = token
+        super().__init__(token=token, preferred_format=preferred_format)
         self.output_dir = Path(output_dir)
-        self.preferred_format = preferred_format.lower()
-        self.client = None
-        self.session = requests.Session()
         
         # Create output directory
         self.output_dir.mkdir(exist_ok=True)
@@ -61,68 +51,33 @@ class YandexMusicDownloader:
         )
         self.logger = logging.getLogger(__name__)
     
-    def authenticate(self) -> bool:
+    def authenticate_cli(self) -> bool:
         """
-        Authenticate with Yandex Music API.
+        Authenticate with Yandex Music API (CLI version with print statements).
         
         Returns:
             True if authentication successful, False otherwise
         """
-        try:
-            if not self.token:
-                print("No token provided. Some features may be limited.")
-                self.client = Client()
-                return True
-            
+        if not self.token:
+            print("No token provided. Some features may be limited.")
+        else:
             print("Authenticating with Yandex Music...")
-            self.client = Client(self.token).init()
-            
-            # Test authentication by getting account info
-            account_info = self.client.account_status()
-            if account_info:
-                print(f"✓ Successfully authenticated as: {account_info.account.display_name}")
-                return True
-            else:
-                print("✗ Authentication failed")
-                return False
-                
-        except UnauthorizedError:
-            print("✗ Authentication failed: Invalid token")
-            print("💡 Get your token from: https://yandex-music.readthedocs.io/en/main/token.html")
-            return False
-        except (NetworkError, requests.exceptions.RequestException, requests.exceptions.ConnectionError) as e:
-            print(f"✗ Network error during authentication: {e}")
-            print("💡 Check your internet connection and try again")
-            return False
-        except Exception as e:
-            print(f"✗ Authentication error: {e}")
-            self.logger.error(f"Authentication error: {e}")
+        
+        success, message = super().authenticate()
+        
+        if success:
+            if self.token:
+                print(f"✓ Successfully {message}")
+            return True
+        else:
+            print(f"✗ Authentication failed: {message}")
+            if "Invalid token" in message:
+                print("💡 Get your token from: https://yandex-music.readthedocs.io/en/main/token.html")
+            elif "Network" in message:
+                print("💡 Check your internet connection and try again")
             return False
     
-    def extract_playlist_id(self, url_or_id: str) -> Optional[Tuple[str, str]]:
-        """
-        Extract playlist ID and owner from URL or direct ID.
-        
-        Args:
-            url_or_id: Playlist URL or ID
-            
-        Returns:
-            Tuple of (owner, playlist_id) or None if invalid
-        """
-        # Pattern for Yandex Music playlist URLs
-        url_pattern = r'https?://music\.yandex\.[a-z]+/users/([^/]+)/playlists/(\d+)'
-        
-        match = re.search(url_pattern, url_or_id)
-        if match:
-            return match.group(1), match.group(2)
-        
-        # Check if it's a direct playlist ID format (owner:playlist_id)
-        if ':' in url_or_id:
-            parts = url_or_id.split(':')
-            if len(parts) == 2:
-                return parts[0], parts[1]
-        
-        return None
+    # Inherited from YandexMusicCore: extract_playlist_id, sanitize_filename, get_best_quality_download_info
     
     def get_playlist(self, playlist_identifier: str):
         """
@@ -200,75 +155,7 @@ class YandexMusicDownloader:
             self.logger.error(f"Unexpected error getting playlist: {e}")
             return None
     
-    def sanitize_filename(self, filename: str) -> str:
-        """
-        Sanitize filename for safe file system usage.
-        
-        Args:
-            filename: Original filename
-            
-        Returns:
-            Sanitized filename
-        """
-        # Remove or replace invalid characters
-        invalid_chars = '<>:"/\\|?*'
-        for char in invalid_chars:
-            filename = filename.replace(char, '_')
-        
-        # Limit length
-        if len(filename) > 200:
-            filename = filename[:200]
-        
-        return filename.strip()
-    
-    def get_best_quality_download_info(self, track_id: str, max_retries: int = 3):
-        """
-        Get the best quality download information for a track.
-        
-        Args:
-            track_id: Track ID
-            max_retries: Maximum number of retry attempts
-            
-        Returns:
-            Download info object or None
-        """
-        for attempt in range(max_retries):
-            try:
-                download_infos = self.client.tracks_download_info(track_id)
-                if not download_infos:
-                    return None
-                
-                # First, try to find the preferred format
-                preferred_infos = [info for info in download_infos if info.codec == self.preferred_format]
-                if preferred_infos:
-                    # If preferred format is available, get the highest bitrate version
-                    return max(preferred_infos, key=lambda x: x.bitrate_in_kbps or 0)
-                
-                # If preferred format is not available, fall back to quality priority
-                # Priority order: flac > mp3 > aac > other codecs
-                codec_priority = {'flac': 4, 'mp3': 3, 'aac': 2, 'other': 1}
-                
-                best_info = max(download_infos, key=lambda x: (
-                    codec_priority.get(x.codec, 0),
-                    x.bitrate_in_kbps or 0
-                ))
-                
-                return best_info
-                
-            except (NetworkError, requests.exceptions.RequestException, requests.exceptions.Timeout) as e:
-                if attempt < max_retries - 1:
-                    wait_time = 2 ** attempt  # Exponential backoff
-                    print(f"⚠️  Network error getting download info for track {track_id}, retrying in {wait_time}s... (attempt {attempt + 1}/{max_retries})")
-                    time.sleep(wait_time)
-                    continue
-                else:
-                    self.logger.error(f"Network error getting download info for track {track_id} after {max_retries} attempts: {e}")
-                    return None
-            except Exception as e:
-                self.logger.error(f"Error getting download info for track {track_id}: {e}")
-                return None
-        
-        return None
+    # sanitize_filename and get_best_quality_download_info inherited from YandexMusicCore
     
     def download_track(self, track, track_num: int = 0, total_tracks: int = 0) -> bool:
         """
@@ -536,7 +423,7 @@ Get your token from: https://yandex-music.readthedocs.io/en/main/token.html
     downloader = YandexMusicDownloader(token=token, output_dir=args.output, preferred_format=args.format)
     
     # Authenticate
-    if not downloader.authenticate():
+    if not downloader.authenticate_cli():
         print("\n⚠️  Authentication failed. You can still try to download public playlists.")
         if not token:
             print("💡 Tip: Set YANDEX_MUSIC_TOKEN environment variable or use --token option")
