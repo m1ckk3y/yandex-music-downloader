@@ -392,7 +392,38 @@ This is an open-source project. Contributions are welcome:
 
 This project is licensed under the MIT License. See the LICENSE file for details.
 
+## Architecture
+
+The project uses a modular architecture with shared core functionality:
+
+```
+core/
+├── yandex_music_core.py    # Shared API logic for both CLI and Django
+└── __init__.py
+
+yandex_music_downloader.py   # CLI interface (inherits from core)
+
+music_downloader/            # Django application
+├── services.py              # Django service (inherits from core)
+├── models.py
+├── views.py
+└── templates/
+```
+
+**Benefits:**
+- Single source of truth for API interactions
+- Consistent behavior across CLI and web interface
+- Easier maintenance and bug fixes
+- Shared authentication, playlist parsing, and download logic
+
 ## Version History
+
+- **v2.1.0**: Code Refactoring and Shared Core
+  - Created shared `YandexMusicCore` module
+  - Both CLI and Django now use same implementation
+  - Removed 200+ lines of duplicate code
+  - Improved maintainability and consistency
+  - All existing functionality preserved
 
 - **v2.0.0**: Django Web Interface
   - Added complete Django web application
