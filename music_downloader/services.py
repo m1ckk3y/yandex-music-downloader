@@ -2,39 +2,35 @@
 Сервис для работы с Yandex Music API в Django
 """
 import os
+import sys
 from pathlib import Path
 from typing import List, Optional, Dict, Tuple
-from yandex_music import Client
-from yandex_music.exceptions import YandexMusicError, NetworkError, UnauthorizedError
 from django.conf import settings
 from .models import Playlist, Track, DownloadedPlaylist, DownloadedTrack
 
-
-def _chunked(iterable, size):
-    """Разбить последовательность на чанки фиксированного размера"""
-    for i in range(0, len(iterable), size):
-        yield iterable[i:i+size]
+# Add project root to path to import core module
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from core import YandexMusicCore
 
 
-class YandexMusicService:
-    """Сервис для работы с Yandex Music API"""
+class YandexMusicService(YandexMusicCore):
+    """Сервис для работы с Yandex Music API в Django"""
     
-    def __init__(self, token: Optional[str] = None, user_id: Optional[int] = None, session=None):
-        self.token = token
+    def __init__(self, token: Optional[str] = None, user_id: Optional[int] = None, session=None, preferred_format: str = "mp3"):
+        super().__init__(token=token, preferred_format=preferred_format)
         self.user_id = user_id
-        self.client = None
-        self.session = session  # Django session для обновления прогресса
+        self.django_session = session  # Django session для обновления прогресса
     
     def update_progress(self, current, total, message=''):
         """Обновить прогресс в сессии"""
-        if self.session is not None:
-            self.session['loading_progress'] = {
+        if self.django_session is not None:
+            self.django_session['loading_progress'] = {
                 'status': 'loading',
                 'current': current,
                 'total': total,
                 'message': message
             }
-            self.session.save()
+            self.django_session.save()
     
     def authenticate(self) -> Tuple[bool, str]:
         """
@@ -114,7 +110,8 @@ class YandexMusicService:
                     processed = 0
                     self.update_progress(0, total_tracks, 'Загрузка треков...')
                     
-                    for batch_num, batch in enumerate(_chunked(ids, 100)):
+                    from core.yandex_music_core import chunked
+                    for batch_num, batch in enumerate(chunked(ids, 100)):
                         try:
                             # Загружаем батч
                             batch_tracks = self.client.tracks(batch)
@@ -245,7 +242,8 @@ class YandexMusicService:
                 # Догружаем отсутствующие треки батчами
                 if missing_ids:
                     print(f"Fetching details for {len(missing_ids)} tracks in batches...")
-                    for batch in _chunked(missing_ids, 100):
+                    from core.yandex_music_core import chunked
+                    for batch in chunked(missing_ids, 100):
                         idxs = [b[0] for b in batch]
                         ids = [b[1] for b in batch]
                         try:
