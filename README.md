@@ -1,5 +1,7 @@
 # Yandex Music Playlist Downloader
 
+**English** | [Русский](README.ru.md)
+
 A professional application for downloading Yandex Music playlists with both a command-line interface and a modern Django web interface. Supports multiple audio formats including FLAC, MP3, and AAC.
 
 ## Features
