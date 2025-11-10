@@ -315,13 +315,21 @@ class YandexMusicService(YandexMusicCore):
             playlist_dir = user_dir / f"playlist_{playlist.id}_{playlist.yandex_playlist_id}"
             playlist_dir.mkdir(parents=True, exist_ok=True)
             
-            # Создаем запись о скачанном плейлисте
-            downloaded_playlist = DownloadedPlaylist.objects.create(
+            # Получаем или создаем запись о скачанном плейлисте
+            downloaded_playlist, created = DownloadedPlaylist.objects.get_or_create(
                 user=user,
                 playlist=playlist,
-                title=playlist.title,
-                tracks_count=0
+                defaults={
+                    'title': playlist.title,
+                    'tracks_count': 0
+                }
             )
+            
+            if not created:
+                # Обновляем дату последнего скачивания
+                from django.utils import timezone
+                downloaded_playlist.download_date = timezone.now()
+                downloaded_playlist.save()
             
             successful = 0
             failed = 0
@@ -396,8 +404,8 @@ class YandexMusicService(YandexMusicCore):
                     self.update_progress(idx, total, f'Ошибка при скачивании: {track.title}')
                     continue
             
-            # Обновляем количество треков
-            downloaded_playlist.tracks_count = successful
+            # Обновляем количество треков (подсчитываем реальное количество треков)
+            downloaded_playlist.tracks_count = downloaded_playlist.tracks.count()
             downloaded_playlist.save()
             
             if successful > 0:
