@@ -25,44 +25,65 @@
             </div>
             <div class="card-body">
                 {% if tracks %}
-                <div class="table-responsive">
-                    <table class="table table-hover">
-                        <thead>
-                            <tr>
-                                <th>#</th>
-                                <th>Название</th>
-                                <th>Исполнитель</th>
-                                <th>Формат</th>
-                                <th>Битрейт</th>
-                                <th>Размер</th>
-                                <th>Действия</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for track in tracks %}
-                            <tr>
-                                <td>{{ forloop.counter }}</td>
-                                <td><i class="bi bi-music-note"></i> {{ track.title }}</td>
-                                <td>{{ track.artist }}</td>
-                                <td><span class="badge bg-info">{{ track.format|upper }}</span></td>
-                                <td>
-                                    {% if track.bitrate %}
-                                        {{ track.bitrate }} kbps
-                                    {% else %}
-                                        -
-                                    {% endif %}
-                                </td>
-                                <td>{{ track.get_file_size_mb }} МБ</td>
-                                <td>
-                                    <a href="{% url 'download_file' track.id %}" class="btn btn-sm btn-success" download>
-                                        <i class="bi bi-download"></i> Скачать
-                                    </a>
-                                </td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
+                <form id="downloadForm" method="post" action="#">
+                    {% csrf_token %}
+                    <div class="mb-3">
+                        <button type="button" class="btn btn-sm btn-outline-primary" onclick="selectAll()">
+                            <i class="bi bi-check-square"></i> Выбрать все
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="deselectAll()">
+                            <i class="bi bi-square"></i> Снять выбор
+                        </button>
+                        <button type="button" class="btn btn-sm btn-success" onclick="downloadSelected()">
+                            <i class="bi bi-download"></i> Скачать выбранные (<span id="selectedCount">0</span>)
+                        </button>
+                    </div>
+                    
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th style="width: 40px;">
+                                        <input type="checkbox" id="selectAllCheckbox" onchange="toggleAll(this)">
+                                    </th>
+                                    <th>#</th>
+                                    <th>Название</th>
+                                    <th>Исполнитель</th>
+                                    <th>Формат</th>
+                                    <th>Битрейт</th>
+                                    <th>Размер</th>
+                                    <th>Действия</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for track in tracks %}
+                                <tr>
+                                    <td>
+                                        <input type="checkbox" class="track-checkbox" value="{{ track.id }}" onchange="updateSelectedCount()">
+                                    </td>
+                                    <td>{{ forloop.counter }}</td>
+                                    <td><i class="bi bi-music-note"></i> {{ track.title }}</td>
+                                    <td>{{ track.artist }}</td>
+                                    <td><span class="badge bg-info">{{ track.format|upper }}</span></td>
+                                    <td>
+                                        {% if track.bitrate %}
+                                            {{ track.bitrate }} kbps
+                                        {% else %}
+                                            -
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ track.get_file_size_mb }} МБ</td>
+                                    <td>
+                                        <a href="{% url 'download_file' track.id %}" class="btn btn-sm btn-success" download>
+                                            <i class="bi bi-download"></i> Скачать
+                                        </a>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </form>
                 {% else %}
                 <p class="text-center text-muted">Нет треков</p>
                 {% endif %}
@@ -108,4 +129,79 @@
         </div>
     </div>
 </div>
+
+<script>
+function updateSelectedCount() {
+    const checkboxes = document.querySelectorAll('.track-checkbox:checked');
+    document.getElementById('selectedCount').textContent = checkboxes.length;
+    
+    // Update "select all" checkbox state
+    const allCheckboxes = document.querySelectorAll('.track-checkbox');
+    const selectAllCheckbox = document.getElementById('selectAllCheckbox');
+    selectAllCheckbox.checked = checkboxes.length === allCheckboxes.length && allCheckboxes.length > 0;
+}
+
+function toggleAll(checkbox) {
+    const checkboxes = document.querySelectorAll('.track-checkbox');
+    checkboxes.forEach(cb => cb.checked = checkbox.checked);
+    updateSelectedCount();
+}
+
+function selectAll() {
+    const checkboxes = document.querySelectorAll('.track-checkbox');
+    checkboxes.forEach(cb => cb.checked = true);
+    document.getElementById('selectAllCheckbox').checked = true;
+    updateSelectedCount();
+}
+
+function deselectAll() {
+    const checkboxes = document.querySelectorAll('.track-checkbox');
+    checkboxes.forEach(cb => cb.checked = false);
+    document.getElementById('selectAllCheckbox').checked = false;
+    updateSelectedCount();
+}
+
+function downloadSelected() {
+    const checkboxes = document.querySelectorAll('.track-checkbox:checked');
+    
+    if (checkboxes.length === 0) {
+        alert('Выберите хотя бы один трек для скачивания');
+        return;
+    }
+    
+    // Download each selected track
+    let downloaded = 0;
+    const total = checkboxes.length;
+    
+    checkboxes.forEach((checkbox, index) => {
+        const trackId = checkbox.value;
+        const downloadUrl = `/download-file/${trackId}/`;
+        
+        // Create hidden iframe for download
+        setTimeout(() => {
+            const iframe = document.createElement('iframe');
+            iframe.style.display = 'none';
+            iframe.src = downloadUrl;
+            document.body.appendChild(iframe);
+            
+            // Remove iframe after download starts
+            setTimeout(() => {
+                document.body.removeChild(iframe);
+            }, 1000);
+            
+            downloaded++;
+            if (downloaded === total) {
+                setTimeout(() => {
+                    alert(`Скачивание ${total} треков начато`);
+                }, 500);
+            }
+        }, index * 300); // Delay between downloads to avoid overwhelming browser
+    });
+}
+
+// Initialize count on page load
+document.addEventListener('DOMContentLoaded', function() {
+    updateSelectedCount();
+});
+</script>
 {% endblock %}
