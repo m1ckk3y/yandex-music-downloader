@@ -50,6 +50,5 @@ class PlaylistLoadForm(forms.Form):
     playlist_url = forms.CharField(
         max_length=500,
         label='URL или ID плейлиста',
-        help_text='Например: https://music.yandex.ru/users/username/playlists/123 или username:123 или "liked"',
         widget=forms.TextInput(attrs={'placeholder': 'Введите URL плейлиста', 'class': 'form-control'})
     )

@@ -7,7 +7,6 @@ urlpatterns = [
     path('login/', views.login_view, name='login'),
     path('logout/', views.logout_view, name='logout'),
     path('profile/', views.profile_view, name='profile'),
-    path('load-playlist/', views.load_playlist_view, name='load_playlist'),
     path('playlist-loading/', views.playlist_loading_view, name='playlist_loading'),
     path('api/playlist-load/', views.playlist_load_api, name='playlist_load_api'),
     path('api/playlist-progress/', views.playlist_progress_api, name='playlist_progress_api'),

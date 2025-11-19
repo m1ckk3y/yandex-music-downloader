@@ -6,10 +6,10 @@
 <div class="row">
     <div class="col-12">
         <div class="card mb-4">
-            <div class="card-body text-center">
-                <h1><i class="bi bi-music-note-beamed"></i> Добро пожаловать, {{ user.username }}!</h1>
-                <p class="lead">Скачивайте плейлисты из Yandex Music в высоком качестве</p>
-                
+            <div class="card-header bg-primary text-white">
+                <h4 class="mb-0"><i class="bi bi-plus-circle"></i> Загрузить плейлист</h4>
+            </div>
+            <div class="card-body">
                 {% if not has_token %}
                 <div class="alert alert-warning">
                     <i class="bi bi-exclamation-triangle"></i> 
@@ -18,13 +18,34 @@
                 </div>
                 {% endif %}
                 
-                <div class="d-grid gap-2 d-md-block">
-                    <a href="{% url 'load_playlist' %}" class="btn btn-primary btn-lg">
-                        <i class="bi bi-plus-circle"></i> Загрузить плейлист
+                <form method="post">
+                    {% csrf_token %}
+                    <div class="mb-3">
+                        {{ form.playlist_url.label_tag }}
+                        {{ form.playlist_url }}
+                        <small class="form-text text-muted">{{ form.playlist_url.help_text }}</small>
+                        {% if form.playlist_url.errors %}
+                            <div class="text-danger">{{ form.playlist_url.errors }}</div>
+                        {% endif %}
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary" {% if not has_token %}disabled{% endif %}>
+                        <i class="bi bi-download"></i> Загрузить
+                    </button>
+                    <a href="{% url 'downloaded_playlists' %}" class="btn btn-success">
+                        <i class="bi bi-folder-check"></i> Скачанные плейлисты
                     </a>
-                    <a href="{% url 'downloaded_playlists' %}" class="btn btn-success btn-lg">
-                        <i class="bi bi-download"></i> Скачанные плейлисты
-                    </a>
+                </form>
+                
+                <hr>
+                
+                <div class="alert alert-info">
+                    <h5><i class="bi bi-info-circle"></i> Примеры форматов URL:</h5>
+                    <ul class="mb-0">
+                        <li><code>https://music.yandex.ru/users/username/playlists/123</code></li>
+                        <li><code>username:123</code></li>
+                        <li><code>liked</code> - для ваших любимых треков</li>
+                    </ul>
                 </div>
             </div>
         </div>
@@ -66,12 +87,7 @@
                     </table>
                 </div>
                 {% else %}
-                <p class="text-center text-muted">У вас пока нет загруженных плейлистов</p>
-                <div class="text-center">
-                    <a href="{% url 'load_playlist' %}" class="btn btn-primary">
-                        <i class="bi bi-plus-circle"></i> Загрузить первый плейлист
-                    </a>
-                </div>
+                <p class="text-center text-muted">У вас пока нет загруженных плейлистов. Используйте форму выше для загрузки первого плейлиста.</p>
                 {% endif %}
             </div>
         </div>

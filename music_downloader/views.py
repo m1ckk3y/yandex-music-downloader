@@ -58,18 +58,37 @@ def logout_view(request):
 
 @login_required
 def home_view(request):
-    """Главная страница"""
+    """Главная страница с формой загрузки плейлиста"""
     try:
         profile = request.user.profile
     except UserProfile.DoesNotExist:
         profile = UserProfile.objects.create(user=request.user)
+    
+    # Обработка формы загрузки плейлиста
+    if request.method == 'POST':
+        form = PlaylistLoadForm(request.POST)
+        if form.is_valid():
+            playlist_url = form.cleaned_data['playlist_url']
+            
+            if not profile.yandex_token:
+                messages.error(request, 'Необходимо добавить токен Yandex Music в профиле')
+                return redirect('profile')
+            
+            # Сохраняем URL в сессии для асинхронной загрузки
+            request.session['playlist_url'] = playlist_url
+            request.session['loading_progress'] = {'status': 'pending', 'current': 0, 'total': 0}
+            
+            return redirect('playlist_loading')
+    else:
+        form = PlaylistLoadForm()
     
     playlists = Playlist.objects.filter(user=request.user).order_by('-created_at')
     
     context = {
         'profile': profile,
         'playlists': playlists,
-        'has_token': bool(profile.yandex_token)
+        'has_token': bool(profile.yandex_token),
+        'form': form
     }
     
     return render(request, 'music_downloader/home.html', context)
@@ -96,41 +115,12 @@ def profile_view(request):
 
 
 @login_required
-def load_playlist_view(request):
-    """Загрузка плейлиста для предпросмотра"""
-    if request.method == 'POST':
-        form = PlaylistLoadForm(request.POST)
-        if form.is_valid():
-            playlist_url = form.cleaned_data['playlist_url']
-            
-            try:
-                profile = request.user.profile
-            except UserProfile.DoesNotExist:
-                messages.error(request, 'Профиль не найден')
-                return redirect('home')
-            
-            if not profile.yandex_token:
-                messages.error(request, 'Необходимо добавить токен Yandex Music в профиле')
-                return redirect('profile')
-            
-            # Сохраняем URL в сессии для асинхронной загрузки
-            request.session['playlist_url'] = playlist_url
-            request.session['loading_progress'] = {'status': 'pending', 'current': 0, 'total': 0}
-            
-            return redirect('playlist_loading')
-    else:
-        form = PlaylistLoadForm()
-    
-    return render(request, 'music_downloader/load_playlist.html', {'form': form})
-
-
-@login_required
 def playlist_loading_view(request):
     """Страница с прогресс-баром"""
     playlist_url = request.session.get('playlist_url')
     if not playlist_url:
         messages.error(request, 'Не указан URL плейлиста')
-        return redirect('load_playlist')
+        return redirect('home')
     
     return render(request, 'music_downloader/playlist_loading.html', {'playlist_url': playlist_url})
 
