@@ -30,6 +30,17 @@ class Playlist(models.Model):
     def __str__(self):
         return f"{self.title} ({self.track_count} треков)"
     
+    def get_downloaded_count(self):
+        """Получить количество скачанных треков для этого плейлиста"""
+        downloaded_playlist = self.downloadedplaylist_set.first()
+        if downloaded_playlist:
+            return downloaded_playlist.tracks.count()
+        return 0
+    
+    def get_downloaded_playlist(self):
+        """Получить скачанный плейлист, если существует"""
+        return self.downloadedplaylist_set.first()
+    
     class Meta:
         verbose_name = 'Плейлист'
         verbose_name_plural = 'Плейлисты'

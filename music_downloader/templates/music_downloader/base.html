@@ -35,15 +35,7 @@
                 <span class="navbar-toggler-icon"></span>
             </button>
             <div class="collapse navbar-collapse" id="navbarNav">
-                <ul class="navbar-nav me-auto">
-                    <li class="nav-item">
-                        <a class="nav-link" href="{% url 'home' %}"><i class="bi bi-house"></i> Главная</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="{% url 'downloaded_playlists' %}"><i class="bi bi-download"></i> Скачанные</a>
-                    </li>
-                </ul>
-                <ul class="navbar-nav">
+                <ul class="navbar-nav ms-auto">
                     <li class="nav-item">
                         <a class="nav-link" href="{% url 'profile' %}"><i class="bi bi-person-circle"></i> {{ user.username }}</a>
                     </li>

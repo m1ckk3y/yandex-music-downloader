@@ -160,7 +160,27 @@ class YandexMusicService(YandexMusicCore):
                 return None
             
             owner, playlist_id = playlist_info
-            playlist = self.client.users_playlists(playlist_id, owner)
+            
+            # Handle UUID playlists by using users_playlists without user_id
+            if owner == '__uuid_playlist__':
+                try:
+                    # For UUID playlists, use users_playlists without specifying user_id
+                    playlist = self.client.users_playlists(playlist_id)
+                    if playlist:
+                        # Extract the actual owner from the fetched playlist
+                        if hasattr(playlist, 'owner') and playlist.owner:
+                            owner = str(playlist.owner.uid) if hasattr(playlist.owner, 'uid') else 'unknown'
+                        else:
+                            owner = 'unknown'
+                        print(f"Found UUID playlist with owner: {owner}")
+                    else:
+                        print(f"Could not find UUID playlist {playlist_id}")
+                        return None
+                except Exception as e:
+                    print(f"Error loading UUID playlist {playlist_id}: {e}")
+                    return None
+            else:
+                playlist = self.client.users_playlists(playlist_id, owner)
             
             if not playlist:
                 return None

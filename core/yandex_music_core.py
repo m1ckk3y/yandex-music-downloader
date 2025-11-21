@@ -82,12 +82,25 @@ class YandexMusicCore:
         Returns:
             Tuple of (owner, playlist_id) or None if invalid
         """
-        url_pattern = r'https?://music\.yandex\.[a-z]+/users/([^/]+)/playlists/(\d+)'
-        match = re.search(url_pattern, url_or_id)
+        # Pattern for old format: https://music.yandex.ru/users/[owner]/playlists/[id]
+        url_pattern_old = r'https?://music\.yandex\.[a-z]+/users/([^/]+)/playlists/(\d+)'
+        match = re.search(url_pattern_old, url_or_id)
         
         if match:
             return match.group(1), match.group(2)
         
+        # Pattern for new format: https://music.yandex.ru/playlists/[uuid]
+        # These are public playlists with UUID identifiers
+        url_pattern_new = r'https?://music\.yandex\.[a-z]+/playlists/([a-f0-9\-]+)'
+        match = re.search(url_pattern_new, url_or_id)
+        
+        if match:
+            # For public playlists with UUID, return special marker for owner
+            # The actual owner will be determined by trying common values
+            playlist_id = match.group(1)
+            return '__uuid_playlist__', playlist_id
+        
+        # Direct ID format: owner:playlist_id
         if ':' in url_or_id:
             parts = url_or_id.split(':')
             if len(parts) == 2:
@@ -176,7 +189,27 @@ class YandexMusicCore:
                 return None
             
             owner, playlist_id = playlist_info
-            playlist = self.client.users_playlists(playlist_id, owner)
+            
+            # Handle UUID playlists by using users_playlists without user_id
+            if owner == '__uuid_playlist__':
+                try:
+                    # For UUID playlists, use users_playlists without specifying user_id
+                    playlist = self.client.users_playlists(playlist_id)
+                    if playlist:
+                        # Extract the actual owner from the fetched playlist
+                        if hasattr(playlist, 'owner') and playlist.owner:
+                            owner = str(playlist.owner.uid) if hasattr(playlist.owner, 'uid') else 'unknown'
+                        else:
+                            owner = 'unknown'
+                        self.logger.info(f"Found UUID playlist with owner: {owner}")
+                    else:
+                        self.logger.error(f"Could not find UUID playlist {playlist_id}")
+                        return None
+                except Exception as e:
+                    self.logger.error(f"Error loading UUID playlist {playlist_id}: {e}")
+                    return None
+            else:
+                playlist = self.client.users_playlists(playlist_id, owner)
             
             if not playlist:
                 return None

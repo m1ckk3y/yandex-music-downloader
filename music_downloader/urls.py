@@ -15,7 +15,6 @@ urlpatterns = [
     path('download/progress/', views.download_progress_view, name='download_progress'),
     path('api/download-start/', views.download_start_api, name='download_start_api'),
     path('api/download-progress/', views.download_progress_api, name='download_progress_api'),
-    path('downloaded/', views.downloaded_playlists_view, name='downloaded_playlists'),
     path('downloaded/<int:playlist_id>/', views.downloaded_playlist_detail_view, name='downloaded_playlist_detail'),
     path('downloaded/<int:playlist_id>/delete/', views.delete_downloaded_playlist_view, name='delete_downloaded_playlist'),
     path('download-file/<int:track_id>/', views.download_file_view, name='download_file'),

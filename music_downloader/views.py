@@ -84,9 +84,16 @@ def home_view(request):
     
     playlists = Playlist.objects.filter(user=request.user).order_by('-created_at')
     
+    # Добавляем информацию о скачанных треках для каждого плейлиста
+    playlists_with_downloads = []
+    for playlist in playlists:
+        playlist.downloaded_count = playlist.get_downloaded_count()
+        playlist.downloaded_playlist_obj = playlist.get_downloaded_playlist()
+        playlists_with_downloads.append(playlist)
+    
     context = {
         'profile': profile,
-        'playlists': playlists,
+        'playlists': playlists_with_downloads,
         'has_token': bool(profile.yandex_token),
         'form': form
     }
@@ -226,6 +233,14 @@ def playlist_preview_view(request, playlist_id):
     
     playlist = get_object_or_404(Playlist, id=playlist_id, user=request.user)
     
+    # Получаем скачанный плейлист и список скачанных треков
+    downloaded_playlist = playlist.get_downloaded_playlist()
+    downloaded_track_ids = set()
+    if downloaded_playlist:
+        downloaded_track_ids = set(
+            downloaded_playlist.tracks.values_list('title', 'artist')
+        )
+    
     # Получаем количество треков на странице
     per_page = request.GET.get('per_page', '50')
     try:
@@ -241,12 +256,18 @@ def playlist_preview_view(request, playlist_id):
     page_number = request.GET.get('page', 1)
     page_obj = paginator.get_page(page_number)
     
+    # Помечаем скачанные треки
+    for track in page_obj:
+        track.is_downloaded = (track.title, track.artist) in downloaded_track_ids
+    
     context = {
         'playlist': playlist,
         'tracks': page_obj,
         'page_obj': page_obj,
         'per_page': per_page,
-        'total_tracks': tracks.count()
+        'total_tracks': tracks.count(),
+        'downloaded_playlist': downloaded_playlist,
+        'downloaded_count': len(downloaded_track_ids)
     }
     
     return render(request, 'music_downloader/playlist_preview.html', context)
@@ -329,16 +350,6 @@ def download_progress_api(request):
     return JsonResponse(progress)
 
 
-@login_required
-def downloaded_playlists_view(request):
-    """Просмотр скачанных плейлистов"""
-    downloaded_playlists = DownloadedPlaylist.objects.filter(user=request.user).order_by('-download_date')
-    
-    context = {
-        'downloaded_playlists': downloaded_playlists
-    }
-    
-    return render(request, 'music_downloader/downloaded_playlists.html', context)
 
 
 @login_required
@@ -406,7 +417,7 @@ def delete_downloaded_playlist_view(request, playlist_id):
         downloaded_playlist.delete()
         
         messages.success(request, f'Плейлист "{playlist_title}" успешно удален')
-        return redirect('downloaded_playlists')
+        return redirect('home')
     
     # Для GET запроса возвращаем на страницу плейлиста
     return redirect('downloaded_playlist_detail', playlist_id=playlist_id)

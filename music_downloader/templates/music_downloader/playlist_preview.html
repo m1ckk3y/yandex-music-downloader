@@ -12,6 +12,11 @@
             <div class="card-body">
                 <p><strong>Количество треков:</strong> {{ playlist.track_count }}</p>
                 <p><strong>Владелец:</strong> {{ playlist.owner }}</p>
+                {% if downloaded_count > 0 %}
+                    <div class="alert alert-success mb-0">
+                        <i class="bi bi-check-circle"></i> Уже скачано: {{ downloaded_count }} / {{ playlist.track_count }} треков
+                    </div>
+                {% endif %}
             </div>
         </div>
     </div>
@@ -64,13 +69,19 @@
                             </thead>
                             <tbody>
                                 {% for track in tracks %}
-                                <tr>
+                                <tr {% if track.is_downloaded %}class="table-success"{% endif %}>
                                     <td>
                                         <input type="checkbox" class="form-check-input track-checkbox" 
-                                               name="tracks" value="{{ track.yandex_track_id }}">
+                                               name="tracks" value="{{ track.yandex_track_id }}"
+                                               {% if track.is_downloaded %}checked disabled{% endif %}>
                                     </td>
                                     <td>{{ track.position|add:1 }}</td>
-                                    <td><i class="bi bi-music-note"></i> {{ track.title }}</td>
+                                    <td>
+                                        <i class="bi bi-music-note"></i> {{ track.title }}
+                                        {% if track.is_downloaded %}
+                                            <i class="bi bi-check-circle-fill text-success" title="Уже скачан"></i>
+                                        {% endif %}
+                                    </td>
                                     <td>{{ track.artist }}</td>
                                     <td>
                                         {% if track.duration %}
@@ -150,25 +161,25 @@
     }
     
     function updateSelectedCount() {
-        const checkboxes = document.querySelectorAll('.track-checkbox:checked');
+        const checkboxes = document.querySelectorAll('.track-checkbox:checked:not([disabled])');
         const count = checkboxes.length;
         document.getElementById('selectedCount').textContent = count;
         document.getElementById('downloadBtn').disabled = count === 0;
         
         // Обновляем состояние главного чекбокса
-        const allCheckboxes = document.querySelectorAll('.track-checkbox');
+        const allCheckboxes = document.querySelectorAll('.track-checkbox:not([disabled])');
         const selectAllCheckbox = document.getElementById('selectAllCheckbox');
         selectAllCheckbox.checked = count === allCheckboxes.length && count > 0;
     }
     
     function toggleAll(checkbox) {
-        const trackCheckboxes = document.querySelectorAll('.track-checkbox');
+        const trackCheckboxes = document.querySelectorAll('.track-checkbox:not([disabled])');
         trackCheckboxes.forEach(cb => cb.checked = checkbox.checked);
         updateSelectedCount();
     }
     
     function selectAll() {
-        document.querySelectorAll('.track-checkbox').forEach(cb => cb.checked = true);
+        document.querySelectorAll('.track-checkbox:not([disabled])').forEach(cb => cb.checked = true);
         document.getElementById('selectAllCheckbox').checked = true;
         updateSelectedCount();
     }
