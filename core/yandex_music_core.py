@@ -65,12 +65,12 @@ class YandexMusicCore:
                 return False, "Authentication failed"
         
         except UnauthorizedError:
-            return False, "Invalid token"
+            return False, "Неверный или устаревший токен Yandex Music"
         except NetworkError:
-            return False, "Network error"
+            return False, "Ошибка сети. Проверьте интернет-соединение"
         except Exception as e:
             self.logger.error(f"Authentication error: {e}")
-            return False, f"Authentication error: {str(e)}"
+            return False, f"Ошибка аутентификации: {str(e)}"
     
     def extract_playlist_id(self, url_or_id: str) -> Optional[Tuple[str, str]]:
         """

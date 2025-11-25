@@ -48,7 +48,9 @@ class YandexMusicService(YandexMusicCore):
             success, msg = self.authenticate()
             print(f"[SERVICE DEBUG] Authentication result: success={success}, msg={msg}")
             if not success:
-                print("[SERVICE DEBUG] Authentication failed, returning None")
+                print(f"[SERVICE DEBUG] Authentication failed: {msg}")
+                # Сохраняем сообщение об ошибке для передачи на фронтенд
+                self.last_error = msg
                 return None
         
         try:

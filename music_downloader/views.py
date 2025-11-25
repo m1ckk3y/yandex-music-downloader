@@ -177,9 +177,17 @@ def playlist_load_api(request):
         
         if not playlist_data:
             print("[ERROR] get_playlist_info returned None")
-            request.session['loading_progress'] = {'status': 'error', 'message': 'Не удалось загрузить плейлист'}
+            # Получаем конкретное сообщение об ошибке из сервиса
+            error_message = getattr(service, 'last_error', None)
+            if error_message:
+                if 'Invalid token' in error_message or 'Неверный токен' in error_message:
+                    error_message = 'Неверный или устаревший API-ключ Yandex Music. Пожалуйста, обновите токен в профиле'
+            else:
+                error_message = 'Не удалось загрузить плейлист. Проверьте URL или доступ к плейлисту'
+            
+            request.session['loading_progress'] = {'status': 'error', 'message': error_message}
             request.session.save()
-            return JsonResponse({'error': 'Не удалось загрузить плейлист'}, status=400)
+            return JsonResponse({'error': error_message}, status=400)
         
         tracks_count = len(playlist_data.get('tracks', []))
         
