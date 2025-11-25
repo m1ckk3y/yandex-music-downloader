@@ -105,9 +105,7 @@ function startDownload() {
     .then(data => {
         if (data.status === 'success') {
             addLog('Скачивание успешно завершено!');
-            document.getElementById('loading-spinner').style.display = 'none';
-            document.getElementById('success-message').style.display = 'block';
-            clearInterval(pollingInterval);
+            // Не останавливаем polling здесь - пусть checkProgress обработает финальный статус
         } else if (data.error) {
             throw new Error(data.error);
         }
@@ -134,11 +132,20 @@ function checkProgress() {
             } else if (data.status === 'loading' || data.status === 'downloading') {
                 updateProgress(data);
             } else if (data.status === 'completed') {
+                // Сначала обновляем прогресс до 100%
                 updateProgress(data);
-                document.getElementById('loading-spinner').style.display = 'none';
-                document.getElementById('success-message').style.display = 'block';
-                clearInterval(pollingInterval);
                 addLog('✓ Скачивание завершено!');
+                
+                // Останавливаем polling
+                clearInterval(pollingInterval);
+                pollingInterval = null;
+                
+                // Показываем сообщение об успехе через небольшую задержку,
+                // чтобы пользователь увидел 100%
+                setTimeout(() => {
+                    document.getElementById('loading-spinner').style.display = 'none';
+                    document.getElementById('success-message').style.display = 'block';
+                }, 500);
             } else if (data.status === 'error') {
                 document.getElementById('error-message').textContent = 'Ошибка: ' + data.message;
                 document.getElementById('error-message').style.display = 'block';

@@ -41,16 +41,29 @@ class YandexMusicService(YandexMusicCore):
         Returns:
             Dict с данными плейлиста или None
         """
+        print(f"[SERVICE DEBUG] get_playlist_info called with: {playlist_identifier}")
+        print(f"[SERVICE DEBUG] Client exists: {self.client is not None}")
         if not self.client:
-            success, _ = self.authenticate()
+            print("[SERVICE DEBUG] Authenticating...")
+            success, msg = self.authenticate()
+            print(f"[SERVICE DEBUG] Authentication result: success={success}, msg={msg}")
             if not success:
+                print("[SERVICE DEBUG] Authentication failed, returning None")
                 return None
         
         try:
             # Обработка "liked" плейлиста
             if playlist_identifier.lower() in ['liked', 'favorites', 'my']:
-                print("Loading 'liked' playlist...")
-                liked_tracks = self.client.users_likes_tracks()
+                print("[SERVICE DEBUG] Loading 'liked' playlist...")
+                print(f"[SERVICE DEBUG] Client type: {type(self.client)}")
+                try:
+                    liked_tracks = self.client.users_likes_tracks()
+                    print(f"[SERVICE DEBUG] Liked tracks result: {liked_tracks is not None}")
+                except Exception as e:
+                    print(f"[SERVICE DEBUG] Error calling users_likes_tracks: {e}")
+                    import traceback
+                    traceback.print_exc()
+                    return None
                 if liked_tracks and hasattr(liked_tracks, 'tracks_ids'):
                     tracks_data = []
                     # tracks_ids содержит объекты TrackId, у которых есть атрибут id
@@ -428,7 +441,9 @@ class YandexMusicService(YandexMusicCore):
             downloaded_playlist.tracks_count = downloaded_playlist.tracks.count()
             downloaded_playlist.save()
             
+            # Финальное обновление прогресса до 100%
             if successful > 0:
+                self.update_progress(total, total, f'Скачивание завершено! Успешно скачано {successful} треков')
                 return True, f"Успешно скачано {successful} треков (ошибок: {failed})", downloaded_playlist
             else:
                 return False, f"Не удалось скачать треки (ошибок: {failed})", None

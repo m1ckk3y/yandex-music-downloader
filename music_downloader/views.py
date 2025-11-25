@@ -135,26 +135,35 @@ def playlist_loading_view(request):
 @login_required  
 def playlist_load_api(request):
     """
-API для асинхронной загрузки плейлиста"""
+АPI для асинхронной загрузки плейлиста"""
     import json
+    import traceback
     
     if request.method != 'POST':
         return JsonResponse({'error': 'Method not allowed'}, status=405)
     
     playlist_url = request.session.get('playlist_url')
+    print(f"[DEBUG] Playlist URL from session: {playlist_url}")
     if not playlist_url:
+        print("[ERROR] No playlist URL in session")
         return JsonResponse({'error': 'Не указан URL плейлиста'}, status=400)
     
     try:
         profile = request.user.profile
+        print(f"[DEBUG] Profile found for user {request.user.username}")
     except UserProfile.DoesNotExist:
+        print(f"[ERROR] Profile not found for user {request.user.username}")
         return JsonResponse({'error': 'Профиль не найден'}, status=400)
     
     if not profile.yandex_token:
+        print("[ERROR] No Yandex token in profile")
         return JsonResponse({'error': 'Не указан токен'}, status=400)
+    
+    print(f"[DEBUG] Token exists, length: {len(profile.yandex_token)}")
     
     try:
         # Создаем сервис с передачей сессии для прогресса
+        print("[DEBUG] Creating YandexMusicService...")
         service = YandexMusicService(token=profile.yandex_token, user_id=request.user.id, session=request.session)
         
         # Обновляем прогресс
@@ -162,9 +171,12 @@ API для асинхронной загрузки плейлиста"""
         request.session.save()
         
         # Загружаем плейлист
+        print(f"[DEBUG] Calling get_playlist_info with: {playlist_url}")
         playlist_data = service.get_playlist_info(playlist_url)
+        print(f"[DEBUG] get_playlist_info returned: {bool(playlist_data)}")
         
         if not playlist_data:
+            print("[ERROR] get_playlist_info returned None")
             request.session['loading_progress'] = {'status': 'error', 'message': 'Не удалось загрузить плейлист'}
             request.session.save()
             return JsonResponse({'error': 'Не удалось загрузить плейлист'}, status=400)
@@ -328,10 +340,12 @@ def download_start_api(request):
     success, message, downloaded_playlist = service.download_tracks(playlist_id, track_ids)
     
     if success:
+        # Убеждаемся, что прогресс достигает 100%
+        total_tracks = len(track_ids)
         request.session['loading_progress'] = {
             'status': 'completed',
-            'current': request.session['loading_progress'].get('total', 0),
-            'total': request.session['loading_progress'].get('total', 0),
+            'current': total_tracks,
+            'total': total_tracks,
             'message': message,
             'downloaded_playlist_id': downloaded_playlist.id if downloaded_playlist else None
         }
