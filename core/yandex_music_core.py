@@ -190,11 +190,12 @@ class YandexMusicCore:
             
             owner, playlist_id = playlist_info
             
-            # Handle UUID playlists by using users_playlists without user_id
+            # Handle UUID playlists by using users_playlists with None as user_id
             if owner == '__uuid_playlist__':
                 try:
-                    # For UUID playlists, use users_playlists without specifying user_id
-                    playlist = self.client.users_playlists(playlist_id)
+                    # For UUID playlists, pass the playlist_id as kind and None as user_id
+                    # This tells the API to look up the public playlist by UUID
+                    playlist = self.client.users_playlists(kind=playlist_id, user_id=None)
                     if playlist:
                         # Extract the actual owner from the fetched playlist
                         if hasattr(playlist, 'owner') and playlist.owner:

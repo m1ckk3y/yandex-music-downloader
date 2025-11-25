@@ -26,6 +26,7 @@ A professional application for downloading Yandex Music playlists with both a co
 - 📂 Browse downloaded playlists and tracks
 - 🔄 Pagination support (25/50/100 tracks per page)
 - 📥 Direct file downloads from the browser
+- ✅ Comprehensive test suite with 20+ tests
 
 ## Installation
 
@@ -416,7 +417,36 @@ music_downloader/            # Django application
 - Easier maintenance and bug fixes
 - Shared authentication, playlist parsing, and download logic
 
+## Testing
+
+The project includes a comprehensive test suite:
+
+```bash
+# Run all tests
+python manage.py test music_downloader
+
+# Run specific test class
+python manage.py test music_downloader.tests.PlaylistViewTest
+```
+
+**Test Coverage:**
+- Model tests (UserProfile, Playlist, Track, DownloadedPlaylist)
+- Authentication tests (login, register, logout)
+- View tests (home, profile, playlist preview, downloads)
+- Pagination and track selection tests
+- 20+ passing tests ensuring code quality
+
 ## Version History
+
+- **v2.2.0**: UI Improvements and Track Management
+  - Enhanced playlist preview with persistent track selection across pages
+  - Added individual track deletion from downloaded playlists
+  - Improved button layout and user interface
+  - Fixed localStorage logic for proper handling of downloaded tracks
+  - Added confirmation modals for delete operations
+  - Comprehensive test suite with 20+ tests
+  - Better pagination with track counter
+  - ZIP download for selected tracks
 
 - **v2.1.0**: Code Refactoring and Shared Core
   - Created shared `YandexMusicCore` module
