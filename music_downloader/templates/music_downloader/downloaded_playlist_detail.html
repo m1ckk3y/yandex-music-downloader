@@ -25,19 +25,8 @@
             </div>
             <div class="card-body">
                 {% if tracks %}
-                <form id="downloadForm" method="post" action="#">
+                <form id="downloadForm" method="post">
                     {% csrf_token %}
-                    <div class="mb-3">
-                        <button type="button" class="btn btn-sm btn-outline-primary" onclick="selectAll()">
-                            <i class="bi bi-check-square"></i> Выбрать все
-                        </button>
-                        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="deselectAll()">
-                            <i class="bi bi-square"></i> Снять выбор
-                        </button>
-                        <button type="button" class="btn btn-sm btn-success" onclick="downloadSelected()">
-                            <i class="bi bi-download"></i> Скачать выбранные (<span id="selectedCount">0</span>)
-                        </button>
-                    </div>
                     
                     <div class="table-responsive">
                         <table class="table table-hover">
@@ -59,7 +48,7 @@
                                 {% for track in tracks %}
                                 <tr>
                                     <td>
-                                        <input type="checkbox" class="track-checkbox" value="{{ track.id }}" onchange="updateSelectedCount()">
+                                        <input type="checkbox" class="track-checkbox" name="tracks" value="{{ track.id }}" onchange="updateSelectedCount()">
                                     </td>
                                     <td>{{ forloop.counter }}</td>
                                     <td><i class="bi bi-music-note"></i> {{ track.title }}</td>
@@ -74,8 +63,13 @@
                                     </td>
                                     <td>{{ track.get_file_size_mb }} МБ</td>
                                     <td>
-                                        <a href="{% url 'download_file' track.id %}" class="btn btn-sm btn-success" download>
-                                            <i class="bi bi-download"></i> Скачать
+                                        <button type="button" class="btn btn-sm btn-danger me-1" 
+                                                onclick="deleteTrack({{ track.id }}, '{{ track.title|escapejs }}')"
+                                                title="Удалить трек">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                        <a href="{% url 'download_file' track.id %}" class="btn btn-sm btn-success" download title="Скачать">
+                                            <i class="bi bi-download"></i>
                                         </a>
                                     </td>
                                 </tr>
@@ -89,12 +83,17 @@
                 {% endif %}
                 
                 <div class="mt-3 d-flex justify-content-between">
-                    <a href="{% url 'home' %}" class="btn btn-secondary">
+                    <a href="{% url 'downloaded_playlists' %}" class="btn btn-secondary">
                         <i class="bi bi-arrow-left"></i> Назад к списку
                     </a>
-                    <button type="button" class="btn btn-danger" data-bs-toggle="modal" data-bs-target="#deleteModal">
-                        <i class="bi bi-trash"></i> Удалить плейлист
-                    </button>
+                    <div>
+                        <button type="button" class="btn btn-danger me-2" data-bs-toggle="modal" data-bs-target="#deleteModal">
+                            <i class="bi bi-trash"></i> Удалить плейлист
+                        </button>
+                        <button type="submit" form="downloadForm" class="btn btn-success" id="downloadBtn" disabled>
+                            <i class="bi bi-save"></i> Сохранить выбранные (<span id="selectedCount">0</span>)
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -130,10 +129,50 @@
     </div>
 </div>
 
+<!-- Modal подтверждения удаления трека -->
+<div class="modal fade" id="deleteTrackModal" tabindex="-1" aria-labelledby="deleteTrackModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title" id="deleteTrackModalLabel">
+                    <i class="bi bi-exclamation-triangle"></i> Подтвердите удаление
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>Вы уверены, что хотите удалить трек <strong id="deleteTrackTitle"></strong>?</p>
+                <p class="text-danger"><strong>Внимание:</strong> Файл будет удален с диска.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="bi bi-x"></i> Отмена
+                </button>
+                <form method="post" id="deleteTrackForm" style="display: inline;">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-danger">
+                        <i class="bi bi-trash"></i> Удалить
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
+function deleteTrack(trackId, trackTitle) {
+    document.getElementById('deleteTrackTitle').textContent = trackTitle;
+    document.getElementById('deleteTrackForm').action = '{% url "delete_downloaded_track" 0 %}'.replace('0', trackId);
+    const modal = new bootstrap.Modal(document.getElementById('deleteTrackModal'));
+    modal.show();
+}
+
 function updateSelectedCount() {
     const checkboxes = document.querySelectorAll('.track-checkbox:checked');
-    document.getElementById('selectedCount').textContent = checkboxes.length;
+    const count = checkboxes.length;
+    document.getElementById('selectedCount').textContent = count;
+    
+    // Enable/disable download button
+    document.getElementById('downloadBtn').disabled = count === 0;
     
     // Update "select all" checkbox state
     const allCheckboxes = document.querySelectorAll('.track-checkbox');
@@ -147,60 +186,11 @@ function toggleAll(checkbox) {
     updateSelectedCount();
 }
 
-function selectAll() {
-    const checkboxes = document.querySelectorAll('.track-checkbox');
-    checkboxes.forEach(cb => cb.checked = true);
-    document.getElementById('selectAllCheckbox').checked = true;
-    updateSelectedCount();
-}
-
-function deselectAll() {
-    const checkboxes = document.querySelectorAll('.track-checkbox');
-    checkboxes.forEach(cb => cb.checked = false);
-    document.getElementById('selectAllCheckbox').checked = false;
-    updateSelectedCount();
-}
-
-function downloadSelected() {
-    const checkboxes = document.querySelectorAll('.track-checkbox:checked');
-    
-    if (checkboxes.length === 0) {
-        alert('Выберите хотя бы один трек для скачивания');
-        return;
-    }
-    
-    // Download each selected track
-    let downloaded = 0;
-    const total = checkboxes.length;
-    
-    checkboxes.forEach((checkbox, index) => {
-        const trackId = checkbox.value;
-        const downloadUrl = `/download-file/${trackId}/`;
-        
-        // Create hidden iframe for download
-        setTimeout(() => {
-            const iframe = document.createElement('iframe');
-            iframe.style.display = 'none';
-            iframe.src = downloadUrl;
-            document.body.appendChild(iframe);
-            
-            // Remove iframe after download starts
-            setTimeout(() => {
-                document.body.removeChild(iframe);
-            }, 1000);
-            
-            downloaded++;
-            if (downloaded === total) {
-                setTimeout(() => {
-                    alert(`Скачивание ${total} треков начато`);
-                }, 500);
-            }
-        }, index * 300); // Delay between downloads to avoid overwhelming browser
-    });
-}
-
-// Initialize count on page load
+// Add change listeners to all checkboxes
 document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('.track-checkbox').forEach(checkbox => {
+        checkbox.addEventListener('change', updateSelectedCount);
+    });
     updateSelectedCount();
 });
 </script>

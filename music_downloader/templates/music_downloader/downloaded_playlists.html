@@ -1,0 +1,47 @@
+{% extends 'music_downloader/base.html' %}
+
+{% block title %}Скачанные плейлисты - Yandex Music Downloader{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header bg-success text-white">
+                <h4 class="mb-0"><i class="bi bi-folder-check"></i> Скачанные плейлисты</h4>
+            </div>
+            <div class="card-body">
+                {% if downloaded_playlists %}
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Название</th>
+                                <th>Количество треков</th>
+                                <th>Скачано</th>
+                                <th>Дата скачивания</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for playlist in downloaded_playlists %}
+                            <tr style="cursor: pointer;" onclick="window.location='{% url 'downloaded_playlist_detail' playlist.id %}'">
+                                <td><i class="bi bi-music-note-list"></i> {{ playlist.title }}</td>
+                                <td>{{ playlist.tracks_count }}</td>
+                                <td>
+                                    <span class="badge bg-success">
+                                        <i class="bi bi-check-circle"></i> {{ playlist.tracks_count }}
+                                    </span>
+                                </td>
+                                <td>{{ playlist.download_date|date:"d.m.Y H:i" }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <p class="text-center text-muted">У вас пока нет скачанных плейлистов.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

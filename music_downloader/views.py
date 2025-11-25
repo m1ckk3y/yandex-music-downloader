@@ -250,6 +250,7 @@ API для получения прогресса загрузки"""
 def playlist_preview_view(request, playlist_id):
     """Предпросмотр плейлиста с выбором треков"""
     from django.core.paginator import Paginator
+    import json
     
     playlist = get_object_or_404(Playlist, id=playlist_id, user=request.user)
     
@@ -280,6 +281,12 @@ def playlist_preview_view(request, playlist_id):
     for track in page_obj:
         track.is_downloaded = (track.title, track.artist) in downloaded_track_ids
     
+    # Получаем все ID треков для JavaScript (кроме уже скачанных)
+    all_track_ids = []
+    for track in tracks:
+        if (track.title, track.artist) not in downloaded_track_ids:
+            all_track_ids.append(track.yandex_track_id)
+    
     context = {
         'playlist': playlist,
         'tracks': page_obj,
@@ -287,7 +294,8 @@ def playlist_preview_view(request, playlist_id):
         'per_page': per_page,
         'total_tracks': tracks.count(),
         'downloaded_playlist': downloaded_playlist,
-        'downloaded_count': len(downloaded_track_ids)
+        'downloaded_count': len(downloaded_track_ids),
+        'all_track_ids_json': json.dumps(all_track_ids)
     }
     
     return render(request, 'music_downloader/playlist_preview.html', context)
@@ -375,9 +383,33 @@ def download_progress_api(request):
 
 
 @login_required
+def downloaded_playlists_view(request):
+    """Страница со списком скачанных плейлистов"""
+    # Получаем все скачанные плейлисты пользователя
+    downloaded_playlists = DownloadedPlaylist.objects.filter(user=request.user).order_by('-download_date')
+    
+    context = {
+        'downloaded_playlists': downloaded_playlists
+    }
+    
+    return render(request, 'music_downloader/downloaded_playlists.html', context)
+
+
+@login_required
 def downloaded_playlist_detail_view(request, playlist_id):
-    """Детали скачанного плейлиста"""
+    """Детали скачанного плейлиста с возможностью выбора"""
     downloaded_playlist = get_object_or_404(DownloadedPlaylist, id=playlist_id, user=request.user)
+    
+    # Если это POST запрос - обрабатываем выбор треков для zip
+    if request.method == 'POST':
+        selected_tracks = request.POST.getlist('tracks')
+        if selected_tracks:
+            # Сохраняем выбранные треки в сессии и перенаправляем на скачивание zip
+            request.session['zip_track_ids'] = selected_tracks
+            return redirect('download_zip', playlist_id=playlist_id)
+        else:
+            messages.warning(request, 'Выберите хотя бы один трек')
+    
     tracks = downloaded_playlist.tracks.all()
     
     context = {
@@ -403,6 +435,132 @@ def download_file_view(request, track_id):
         raise Http404("Файл не найден")
     
     return FileResponse(open(file_path, 'rb'), as_attachment=True, filename=file_path.name)
+
+
+def transliterate_russian(text):
+    """Транслитерация русского текста в латиницу"""
+    translit_map = {
+        'А': 'A', 'Б': 'B', 'В': 'V', 'Г': 'G', 'Д': 'D', 'Е': 'E', 'Ё': 'Yo', 'Ж': 'Zh',
+        'З': 'Z', 'И': 'I', 'Й': 'Y', 'К': 'K', 'Л': 'L', 'М': 'M', 'Н': 'N', 'О': 'O',
+        'П': 'P', 'Р': 'R', 'С': 'S', 'Т': 'T', 'У': 'U', 'Ф': 'F', 'Х': 'H', 'Ц': 'Ts',
+        'Ч': 'Ch', 'Ш': 'Sh', 'Щ': 'Sch', 'Ъ': '', 'Ы': 'Y', 'Ь': '', 'Э': 'E', 'Ю': 'Yu', 'Я': 'Ya',
+        'а': 'a', 'б': 'b', 'в': 'v', 'г': 'g', 'д': 'd', 'е': 'e', 'ё': 'yo', 'ж': 'zh',
+        'з': 'z', 'и': 'i', 'й': 'y', 'к': 'k', 'л': 'l', 'м': 'm', 'н': 'n', 'о': 'o',
+        'п': 'p', 'р': 'r', 'с': 's', 'т': 't', 'у': 'u', 'ф': 'f', 'х': 'h', 'ц': 'ts',
+        'ч': 'ch', 'ш': 'sh', 'щ': 'sch', 'ъ': '', 'ы': 'y', 'ь': '', 'э': 'e', 'ю': 'yu', 'я': 'ya'
+    }
+    result = []
+    for char in text:
+        if char in translit_map:
+            result.append(translit_map[char])
+        else:
+            result.append(char)
+    return ''.join(result)
+
+
+@login_required
+def download_zip_view(request, playlist_id):
+    """Скачивание выбранных треков в zip архиве"""
+    import zipfile
+    import tempfile
+    import os
+    from django.http import HttpResponse
+    
+    downloaded_playlist = get_object_or_404(DownloadedPlaylist, id=playlist_id, user=request.user)
+    
+    # Получаем выбранные ID треков из сессии
+    track_ids = request.session.get('zip_track_ids', [])
+    if not track_ids:
+        messages.error(request, 'Не выбраны треки для скачивания')
+        return redirect('downloaded_playlist_detail', playlist_id=playlist_id)
+    
+    # Преобразуем ID в целые числа
+    track_ids = [int(tid) for tid in track_ids]
+    
+    # Получаем выбранные треки
+    tracks = downloaded_playlist.tracks.filter(id__in=track_ids)
+    
+    if not tracks.exists():
+        messages.error(request, 'Не найдены выбранные треки')
+        return redirect('downloaded_playlist_detail', playlist_id=playlist_id)
+    
+    # Создаем временный zip файл
+    temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.zip')
+    
+    try:
+        with zipfile.ZipFile(temp_file.name, 'w', zipfile.ZIP_DEFLATED) as zipf:
+            media_root = Path(settings.MEDIA_ROOT)
+            
+            for track in tracks:
+                file_path = media_root / track.file_path
+                if file_path.exists():
+                    # Добавляем файл в архив с именем файла
+                    zipf.write(file_path, arcname=file_path.name)
+        
+        # Открываем файл для чтения
+        with open(temp_file.name, 'rb') as f:
+            response = HttpResponse(f.read(), content_type='application/zip')
+            # Транслитерируем название плейлиста
+            transliterated_title = transliterate_russian(downloaded_playlist.title)
+            # Санитаризируем имя файла
+            safe_title = "".join(c for c in transliterated_title if c.isalnum() or c in (' ', '-', '_')).strip()
+            # Заменяем пробелы на нижние подчеркивания
+            safe_title = safe_title.replace(' ', '_')
+            # Добавляем дату скачивания к имени файла
+            download_date_str = downloaded_playlist.download_date.strftime('%Y-%m-%d_%H-%M')
+            zip_filename = f"{safe_title}_{download_date_str}.zip"
+            
+            response['Content-Disposition'] = f'attachment; filename="{zip_filename}"'
+            
+            # Очищаем сессию
+            if 'zip_track_ids' in request.session:
+                del request.session['zip_track_ids']
+            
+            return response
+    finally:
+        # Удаляем временный файл
+        try:
+            os.unlink(temp_file.name)
+        except:
+            pass
+
+
+@login_required
+def delete_downloaded_track_view(request, track_id):
+    """Удаление отдельного трека"""
+    track = get_object_or_404(DownloadedTrack, id=track_id)
+    
+    # Проверяем что пользователь имеет доступ к треку
+    if track.downloaded_playlist.user != request.user:
+        raise Http404("Трек не найден")
+    
+    if request.method == 'POST':
+        playlist_id = track.downloaded_playlist.id
+        track_title = track.title
+        
+        # Удаляем файл трека
+        media_root = Path(settings.MEDIA_ROOT)
+        file_path = media_root / track.file_path
+        if file_path.exists():
+            try:
+                file_path.unlink()
+            except Exception as e:
+                print(f"Error deleting file {file_path}: {e}")
+                messages.error(request, f'Ошибка удаления файла: {e}')
+                return redirect('downloaded_playlist_detail', playlist_id=playlist_id)
+        
+        # Удаляем запись из базы данных
+        track.delete()
+        
+        # Обновляем счетчик треков в плейлисте
+        track.downloaded_playlist.tracks_count = track.downloaded_playlist.tracks.count()
+        track.downloaded_playlist.save()
+        
+        messages.success(request, f'Трек "{track_title}" успешно удален')
+        return redirect('downloaded_playlist_detail', playlist_id=playlist_id)
+    
+    # Для GET запроса возвращаем на страницу плейлиста
+    return redirect('downloaded_playlist_detail', playlist_id=track.downloaded_playlist.id)
 
 
 @login_required
@@ -439,7 +597,7 @@ def delete_downloaded_playlist_view(request, playlist_id):
         downloaded_playlist.delete()
         
         messages.success(request, f'Плейлист "{playlist_title}" успешно удален')
-        return redirect('home')
+        return redirect('downloaded_playlists')
     
     # Для GET запроса возвращаем на страницу плейлиста
     return redirect('downloaded_playlist_detail', playlist_id=playlist_id)

@@ -28,14 +28,6 @@
             <div class="card-header bg-secondary text-white">
                 <div class="d-flex justify-content-between align-items-center mb-2">
                     <h5 class="mb-0"><i class="bi bi-list-check"></i> Выберите треки для скачивания</h5>
-                    <div>
-                        <button type="button" class="btn btn-sm btn-light" onclick="selectAll()">
-                            <i class="bi bi-check-all"></i> Выбрать все
-                        </button>
-                        <button type="button" class="btn btn-sm btn-light" onclick="deselectAll()">
-                            <i class="bi bi-x-square"></i> Снять все
-                        </button>
-                    </div>
                 </div>
                 <div class="d-flex justify-content-between align-items-center">
                     <small>Всего треков: {{ total_tracks }}</small>
@@ -96,24 +88,28 @@
                         </table>
                     </div>
                     
+                    <!-- Кнопки над пагинацией -->
                     <div class="d-flex justify-content-between align-items-center mt-3">
+                        <a href="{% url 'home' %}" class="btn btn-secondary">
+                            <i class="bi bi-arrow-left"></i> Назад
+                        </a>
                         <div>
-                            <span id="selectedCount">0</span> треков выбрано
-                        </div>
-                        <div>
-                            <button type="submit" class="btn btn-success btn-lg" id="downloadBtn" disabled>
+                            {% if downloaded_playlist %}
+                            <button type="button" class="btn btn-danger me-2" data-bs-toggle="modal" data-bs-target="#deletePlaylistModal">
+                                <i class="bi bi-trash"></i> Удалить плейлист
+                            </button>
+                            {% endif %}
+                            <button type="submit" class="btn btn-success" id="downloadBtn" disabled>
                                 <i class="bi bi-download"></i> Скачать выбранные
                             </button>
-                            <a href="{% url 'home' %}" class="btn btn-secondary btn-lg">
-                                <i class="bi bi-arrow-left"></i> Назад
-                            </a>
                         </div>
                     </div>
                     
-                    <!-- Пагинация -->
+                    <!-- Пагинация со счетчиком -->
                     {% if page_obj.has_other_pages %}
-                    <nav class="mt-4">
-                        <ul class="pagination justify-content-center">
+                    <div class="d-flex justify-content-between align-items-center mt-4">
+                        <nav>
+                            <ul class="pagination mb-0">
                             {% if page_obj.has_previous %}
                             <li class="page-item">
                                 <a class="page-link" href="?page=1&per_page={{ per_page }}">Первая</a>
@@ -138,7 +134,13 @@
                             </li>
                             {% endif %}
                         </ul>
-                    </nav>
+                        </nav>
+                        <span><span id="selectedCount">0</span> треков выбрано</span>
+                    </div>
+                    {% else %}
+                    <div class="mt-4 text-end">
+                        <span><span id="selectedCount">0</span> треков выбрано</span>
+                    </div>
                     {% endif %}
                     {% else %}
                     <p class="text-center text-muted">Нет доступных треков</p>
@@ -153,6 +155,50 @@
 
 {% block extra_js %}
 <script>
+    const STORAGE_KEY = 'selected_tracks_{{ playlist.id }}';
+    const ALL_TRACK_IDS = {{ all_track_ids_json|safe }};
+    
+    // Загрузить выбранные треки из localStorage
+    function loadSelectedTracks() {
+        const stored = localStorage.getItem(STORAGE_KEY);
+        if (!stored) return [];
+        
+        // Фильтруем только те треки, которые еще доступны для скачивания
+        const allStored = JSON.parse(stored);
+        return allStored.filter(id => ALL_TRACK_IDS.includes(id));
+    }
+    
+    // Сохранить выбранные треки в localStorage
+    function saveSelectedTracks() {
+        const selected = [];
+        document.querySelectorAll('.track-checkbox:checked:not([disabled])').forEach(cb => {
+            selected.push(cb.value);
+        });
+        
+        // Объединяем с выбранными на других страницах, но исключаем скачанные
+        const allSelected = loadSelectedTracks();
+        const currentPageIds = Array.from(document.querySelectorAll('.track-checkbox:not([disabled])')).map(cb => cb.value);
+        
+        // Удаляем ID с текущей страницы из сохраненного списка
+        const otherPagesSelected = allSelected.filter(id => !currentPageIds.includes(id));
+        
+        // Добавляем выбранные с текущей страницы
+        const finalSelected = [...otherPagesSelected, ...selected];
+        
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(finalSelected));
+    }
+    
+    // Восстановить выбор из localStorage
+    function restoreSelection() {
+        const selected = loadSelectedTracks();
+        document.querySelectorAll('.track-checkbox:not([disabled])').forEach(cb => {
+            if (selected.includes(cb.value)) {
+                cb.checked = true;
+            }
+        });
+        updateSelectedCount();
+    }
+    
     function changePerPage(value) {
         const url = new URL(window.location);
         url.searchParams.set('per_page', value);
@@ -161,33 +207,38 @@
     }
     
     function updateSelectedCount() {
-        const checkboxes = document.querySelectorAll('.track-checkbox:checked:not([disabled])');
-        const count = checkboxes.length;
-        document.getElementById('selectedCount').textContent = count;
-        document.getElementById('downloadBtn').disabled = count === 0;
+        // Сначала сохраняем текущее состояние
+        saveSelectedTracks();
         
-        // Обновляем состояние главного чекбокса
-        const allCheckboxes = document.querySelectorAll('.track-checkbox:not([disabled])');
+        // Затем загружаем актуальное количество
+        const allSelected = loadSelectedTracks();
+        const totalCount = allSelected.length;
+        
+        document.getElementById('selectedCount').textContent = totalCount;
+        document.getElementById('downloadBtn').disabled = totalCount === 0;
+        
+        // Обновляем состояние главного чекбокса (выбраны ли ВСЕ треки в плейлисте)
         const selectAllCheckbox = document.getElementById('selectAllCheckbox');
-        selectAllCheckbox.checked = count === allCheckboxes.length && count > 0;
+        selectAllCheckbox.checked = totalCount === ALL_TRACK_IDS.length && ALL_TRACK_IDS.length > 0;
     }
     
     function toggleAll(checkbox) {
-        const trackCheckboxes = document.querySelectorAll('.track-checkbox:not([disabled])');
-        trackCheckboxes.forEach(cb => cb.checked = checkbox.checked);
-        updateSelectedCount();
-    }
-    
-    function selectAll() {
-        document.querySelectorAll('.track-checkbox:not([disabled])').forEach(cb => cb.checked = true);
-        document.getElementById('selectAllCheckbox').checked = true;
-        updateSelectedCount();
-    }
-    
-    function deselectAll() {
-        document.querySelectorAll('.track-checkbox').forEach(cb => cb.checked = false);
-        document.getElementById('selectAllCheckbox').checked = false;
-        updateSelectedCount();
+        if (checkbox.checked) {
+            // Выбираем ВСЕ доступные треки в плейлисте (исключая уже скачанные)
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(ALL_TRACK_IDS));
+            // Выделяем все чекбоксы на текущей странице
+            document.querySelectorAll('.track-checkbox:not([disabled])').forEach(cb => cb.checked = true);
+        } else {
+            // Снимаем выбор со ВСЕХ треков
+            localStorage.setItem(STORAGE_KEY, JSON.stringify([]));
+            // Снимаем выделение на текущей странице (кроме disabled)
+            document.querySelectorAll('.track-checkbox:not([disabled])').forEach(cb => cb.checked = false);
+        }
+        
+        // Обновляем счетчик и UI
+        const totalCount = loadSelectedTracks().length;
+        document.getElementById('selectedCount').textContent = totalCount;
+        document.getElementById('downloadBtn').disabled = totalCount === 0;
     }
     
     // Добавляем обработчик для всех чекбоксов треков
@@ -195,7 +246,64 @@
         checkbox.addEventListener('change', updateSelectedCount);
     });
     
-    // Инициализируем счетчик
-    updateSelectedCount();
+    // Перед отправкой формы добавляем все выбранные треки
+    document.getElementById('downloadForm').addEventListener('submit', function(e) {
+        // Удаляем все текущие скрытые поля
+        document.querySelectorAll('input[name="tracks"][type="hidden"]').forEach(el => el.remove());
+        
+        // Добавляем все выбранные треки из localStorage (уже отфильтрованные)
+        const selected = loadSelectedTracks();
+        
+        if (selected.length === 0) {
+            e.preventDefault();
+            alert('Выберите хотя бы один трек для скачивания');
+            return;
+        }
+        
+        selected.forEach(trackId => {
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = 'tracks';
+            input.value = trackId;
+            this.appendChild(input);
+        });
+        
+        // Очищаем localStorage после отправки
+        localStorage.removeItem(STORAGE_KEY);
+    });
+    
+    // Восстанавливаем выбор при загрузке страницы
+    restoreSelection();
 </script>
+
+<!-- Modal подтверждения удаления плейлиста -->
+{% if downloaded_playlist %}
+<div class="modal fade" id="deletePlaylistModal" tabindex="-1" aria-labelledby="deletePlaylistModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title" id="deletePlaylistModalLabel">
+                    <i class="bi bi-exclamation-triangle"></i> Подтвердите удаление
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>Вы уверены, что хотите удалить скачанный плейлист <strong>"{{ playlist.title }}"</strong>?</p>
+                <p class="text-danger"><strong>Внимание:</strong> Все скачанные файлы ({{ downloaded_playlist.tracks_count }} треков) будут удалены с диска.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="bi bi-x"></i> Отмена
+                </button>
+                <form method="post" action="{% url 'delete_downloaded_playlist' downloaded_playlist.id %}" style="display: inline;">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-danger">
+                        <i class="bi bi-trash"></i> Удалить
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
 {% endblock %}

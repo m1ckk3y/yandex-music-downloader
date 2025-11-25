@@ -65,40 +65,23 @@
                                 <th>Количество треков</th>
                                 <th>Скачано</th>
                                 <th>Дата добавления</th>
-                                <th>Действия</th>
                             </tr>
                         </thead>
                         <tbody>
                             {% for playlist in playlists %}
-                            <tr>
+                            <tr style="cursor: pointer;" onclick="window.location='{% url 'playlist_preview' playlist.id %}'">
                                 <td><i class="bi bi-music-note-list"></i> {{ playlist.title }}</td>
                                 <td>{{ playlist.track_count }}</td>
                                 <td>
                                     {% if playlist.downloaded_count > 0 %}
                                         <span class="badge bg-success">
-                                            <i class="bi bi-check-circle"></i> {{ playlist.downloaded_count }} / {{ playlist.track_count }}
+                                            <i class="bi bi-check-circle"></i> {{ playlist.downloaded_count }}
                                         </span>
                                     {% else %}
-                                        <span class="text-muted">0 / {{ playlist.track_count }}</span>
+                                        <span class="text-muted">0</span>
                                     {% endif %}
                                 </td>
                                 <td>{{ playlist.created_at|date:"d.m.Y H:i" }}</td>
-                                <td>
-                                    {% if playlist.downloaded_count == playlist.track_count %}
-                                        <a href="{% url 'downloaded_playlist_detail' playlist.downloaded_playlist_obj.id %}" class="btn btn-sm btn-success">
-                                            <i class="bi bi-folder-check"></i> Просмотр скачанных
-                                        </a>
-                                    {% else %}
-                                        <a href="{% url 'playlist_preview' playlist.id %}" class="btn btn-sm btn-primary">
-                                            <i class="bi bi-download"></i> Скачать
-                                        </a>
-                                        {% if playlist.downloaded_count > 0 %}
-                                            <a href="{% url 'downloaded_playlist_detail' playlist.downloaded_playlist_obj.id %}" class="btn btn-sm btn-outline-success">
-                                                <i class="bi bi-eye"></i> Скачанные
-                                            </a>
-                                        {% endif %}
-                                    {% endif %}
-                                </td>
                             </tr>
                             {% endfor %}
                         </tbody>
