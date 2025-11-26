@@ -90,6 +90,14 @@ class YandexMusicDownloader(YandexMusicCore):
             Playlist object or None
         """
         try:
+            # Ensure client is initialized (for both public and authenticated requests)
+            if not self.client:
+                success, message = super().authenticate()
+                if not success:
+                    print(f"✗ Authentication failed: {message}")
+                    self.logger.error(f"Authentication failed in get_playlist: {message}")
+                    return None
+            
             # Handle special cases
             if playlist_identifier.lower() in ['liked', 'favorites', 'my']:
                 print("Getting your liked tracks...")
@@ -114,11 +122,39 @@ class YandexMusicDownloader(YandexMusicCore):
                 print(f"✗ Invalid playlist URL or ID: {playlist_identifier}")
                 print("Valid formats:")
                 print("  - https://music.yandex.ru/users/username/playlists/123")
+                print("  - https://music.yandex.ru/playlists/<uuid>")
                 print("  - username:123")
                 print("  - 'liked' for your liked tracks")
                 return None
             
             owner, playlist_id = playlist_info
+            
+            # UUID-style playlists (new public / personal links like /playlists/<uuid>)
+            if owner == '__uuid_playlist__':
+                print(f"Detected UUID playlist link: {playlist_id}")
+                try:
+                    playlist = self.resolve_uuid_playlist(playlist_id)
+                except Exception as e:
+                    print(f"✗ Error resolving UUID playlist: {e}")
+                    self.logger.error(f"Error resolving UUID playlist {playlist_id}: {e}")
+                    return None
+                
+                if not playlist:
+                    print(f"✗ Could not find UUID playlist {playlist_id}")
+                    print("This could mean:")
+                    print("  - The playlist doesn't exist or is not available in your region")
+                    print("  - The playlist is private and you don't have access")
+                    return None
+                
+                track_count = len(playlist.tracks) if hasattr(playlist, 'tracks') and playlist.tracks else 0
+                owner_obj = getattr(playlist, 'owner', None)
+                owner_login = getattr(owner_obj, 'login', None) if owner_obj is not None else None
+                owner_uid = getattr(playlist, 'uid', None)
+                owner_display = owner_login or owner_uid or 'unknown'
+                print(f"✓ Found playlist: {playlist.title} ({track_count} tracks) from user {owner_display}")
+                return playlist
+            
+            # Legacy users/<owner>/playlists/<kind> style or owner:kind ID
             print(f"Getting playlist {playlist_id} from user {owner}...")
             
             try:
@@ -372,6 +408,7 @@ def main():
         epilog="""
 Examples:
   %(prog)s https://music.yandex.ru/users/username/playlists/123
+  %(prog)s https://music.yandex.ru/playlists/be5ecb55-0e70-5bf5-a70b-c26a123e2a84
   %(prog)s username:123
   %(prog)s liked --token YOUR_TOKEN
   %(prog)s https://music.yandex.ru/users/username/playlists/123 --output ./music --token YOUR_TOKEN
@@ -384,7 +421,7 @@ Get your token from: https://yandex-music.readthedocs.io/en/main/token.html
     
     parser.add_argument(
         'playlist',
-        help='Playlist URL, ID (format: owner:playlist_id), or "liked" for your liked tracks'
+        help='Playlist URL (old users/... or new /playlists/<uuid>), ID (format: owner:playlist_id), or "liked" for your liked tracks'
     )
     
     parser.add_argument(

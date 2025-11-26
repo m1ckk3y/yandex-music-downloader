@@ -162,7 +162,98 @@ class YandexMusicCore:
         except Exception as e:
             self.logger.error(f"Error getting liked tracks: {e}")
             return None
-    
+        
+    def resolve_uuid_playlist(self, playlist_uuid: str):
+        """Resolve a public playlist specified by UUID (new web URL format).
+
+        The official yandex-music client does not provide a direct
+        Client.playlist(uuid) method, so we approximate this by:
+        1) Trying the public search API (works for many editorial/public playlists).
+        2) Falling back to scanning the authenticated user's playlists list and
+           matching by ``playlist_uuid`` (works for own playlists that use the
+           new URL format).
+
+        Args:
+            playlist_uuid: UUID string from an URL like
+                https://music.yandex.ru/playlists/<uuid>
+
+        Returns:
+            Playlist object with tracks loaded, or None if not found.
+        """
+        if not self.client:
+            # Caller is expected to authenticate first; we just fail fast here.
+            return None
+
+        target = None
+
+        # 1) Try to resolve via public search API
+        try:
+            search_result = self.client.search(playlist_uuid, type_='playlist')
+        except Exception as e:
+            self.logger.error("Error searching playlist by UUID %s: %s", playlist_uuid, e)
+            search_result = None
+
+        if search_result is not None:
+            playlists_block = getattr(search_result, 'playlists', None)
+            if playlists_block:
+                results = getattr(playlists_block, 'results', None) or []
+                # Prefer exact UUID match if available
+                for pl in results:
+                    if getattr(pl, 'playlist_uuid', None) == playlist_uuid:
+                        target = pl
+                        break
+                # Fallback to the first playlist result if nothing matched exactly
+                if target is None and results:
+                    target = results[0]
+
+        # 2) Fallback: search among the current user's own playlists
+        if target is None:
+            try:
+                user_playlists = self.client.users_playlists_list()
+            except Exception as e:
+                self.logger.error(
+                    "Error resolving UUID playlist %s via users_playlists_list: %s",
+                    playlist_uuid,
+                    e,
+                )
+                user_playlists = []
+
+            for pl in user_playlists:
+                if getattr(pl, 'playlist_uuid', None) == playlist_uuid:
+                    # users_playlists_list returns a lightweight playlist without tracks.
+                    # Fetch the full playlist object with populated tracks where possible.
+                    full_playlist = None
+                    try:
+                        if getattr(pl, 'kind', None) is not None and getattr(pl, 'uid', None) is not None:
+                            full_playlist = self.client.users_playlists(pl.kind, pl.uid)
+                    except Exception as e:
+                        self.logger.error(
+                            "Error loading full playlist for UUID %s (uid=%s, kind=%s): %s",
+                            playlist_uuid,
+                            getattr(pl, 'uid', None),
+                            getattr(pl, 'kind', None),
+                            e,
+                        )
+
+                    target = full_playlist or pl
+                    break
+
+        if target is None:
+            return None
+
+        # Ensure tracks are loaded; fetch_tracks() should populate the tracks list
+        try:
+            if not getattr(target, 'tracks', None):
+                fetched = target.fetch_tracks()
+                if fetched is not None:
+                    target = fetched
+        except Exception as e:
+            self.logger.error(
+                "Error fetching tracks for UUID playlist %s: %s", playlist_uuid, e
+            )
+
+        return target
+        
     def get_playlist_info(self, playlist_identifier: str) -> Optional[Dict[str, Any]]:
         """
         Get playlist information.
@@ -190,25 +281,19 @@ class YandexMusicCore:
             
             owner, playlist_id = playlist_info
             
-            # Handle UUID playlists by using users_playlists with None as user_id
+            # Handle UUID playlists (new public playlist URL format)
             if owner == '__uuid_playlist__':
-                try:
-                    # For UUID playlists, pass the playlist_id as kind and None as user_id
-                    # This tells the API to look up the public playlist by UUID
-                    playlist = self.client.users_playlists(kind=playlist_id, user_id=None)
-                    if playlist:
-                        # Extract the actual owner from the fetched playlist
-                        if hasattr(playlist, 'owner') and playlist.owner:
-                            owner = str(playlist.owner.uid) if hasattr(playlist.owner, 'uid') else 'unknown'
-                        else:
-                            owner = 'unknown'
-                        self.logger.info(f"Found UUID playlist with owner: {owner}")
-                    else:
-                        self.logger.error(f"Could not find UUID playlist {playlist_id}")
-                        return None
-                except Exception as e:
-                    self.logger.error(f"Error loading UUID playlist {playlist_id}: {e}")
+                playlist = self.resolve_uuid_playlist(playlist_id)
+                if not playlist:
+                    self.logger.error(f"Could not resolve UUID playlist {playlist_id}")
                     return None
+                
+                # Try to determine real owner from resolved playlist
+                if hasattr(playlist, 'owner') and getattr(playlist, 'owner', None):
+                    owner_obj = playlist.owner
+                    owner = str(getattr(owner_obj, 'uid', playlist_id))
+                else:
+                    owner = playlist_id
             else:
                 playlist = self.client.users_playlists(playlist_id, owner)
             
