@@ -40,6 +40,7 @@ class YandexMusicDownloader(YandexMusicCore):
         # Create output directory
         self.output_dir.mkdir(exist_ok=True)
         
+        
         # Setup logging
         logging.basicConfig(
             level=logging.INFO,

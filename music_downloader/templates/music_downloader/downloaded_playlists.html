@@ -19,6 +19,7 @@
                                 <th>Количество треков</th>
                                 <th>Скачано</th>
                                 <th>Дата скачивания</th>
+                                <th>Действия</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -32,11 +33,51 @@
                                     </span>
                                 </td>
                                 <td>{{ playlist.download_date|date:"d.m.Y H:i" }}</td>
+                                <td>
+                                    <button type="button"
+                                            class="btn btn-sm btn-danger"
+                                            onclick="event.stopPropagation();"
+                                            data-bs-toggle="modal"
+                                            data-bs-target="#deletePlaylistModal_{{ playlist.id }}">
+                                        <i class="bi bi-trash"></i> Удалить
+                                    </button>
+                                </td>
                             </tr>
                             {% endfor %}
                         </tbody>
                     </table>
                 </div>
+
+                {# Модальные окна подтверждения удаления для каждого плейлиста #}
+                {% for playlist in downloaded_playlists %}
+                <div class="modal fade" id="deletePlaylistModal_{{ playlist.id }}" tabindex="-1" aria-labelledby="deletePlaylistModalLabel_{{ playlist.id }}" aria-hidden="true">
+                    <div class="modal-dialog">
+                        <div class="modal-content">
+                            <div class="modal-header bg-danger text-white">
+                                <h5 class="modal-title" id="deletePlaylistModalLabel_{{ playlist.id }}">
+                                    <i class="bi bi-exclamation-triangle"></i> Подтвердите удаление
+                                </h5>
+                                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                            </div>
+                            <div class="modal-body">
+                                <p>Вы уверены, что хотите удалить скачанный плейлист <strong>"{{ playlist.title }}"</strong>?</p>
+                                <p class="text-danger"><strong>Внимание:</strong> Все скачанные файлы ({{ playlist.tracks_count }} треков) будут удалены с диска.</p>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                                    <i class="bi bi-x"></i> Отмена
+                                </button>
+                                <form method="post" action="{% url 'delete_downloaded_playlist' playlist.id %}" style="display: inline;">
+                                    {% csrf_token %}
+                                    <button type="submit" class="btn btn-danger">
+                                        <i class="bi bi-trash"></i> Удалить
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
                 {% else %}
                 <p class="text-center text-muted">У вас пока нет скачанных плейлистов.</p>
                 {% endif %}

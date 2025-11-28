@@ -41,7 +41,6 @@
                                     <th>Формат</th>
                                     <th>Битрейт</th>
                                     <th>Размер</th>
-                                    <th>Действия</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -62,16 +61,6 @@
                                         {% endif %}
                                     </td>
                                     <td>{{ track.get_file_size_mb }} МБ</td>
-                                    <td>
-                                        <button type="button" class="btn btn-sm btn-danger me-1" 
-                                                onclick="deleteTrack({{ track.id }}, '{{ track.title|escapejs }}')"
-                                                title="Удалить трек">
-                                            <i class="bi bi-trash"></i>
-                                        </button>
-                                        <a href="{% url 'download_file' track.id %}" class="btn btn-sm btn-success" download title="Скачать">
-                                            <i class="bi bi-download"></i>
-                                        </a>
-                                    </td>
                                 </tr>
                                 {% endfor %}
                             </tbody>
@@ -87,108 +76,127 @@
                         <i class="bi bi-arrow-left"></i> Назад к списку
                     </a>
                     <div>
-                        <button type="button" class="btn btn-danger me-2" data-bs-toggle="modal" data-bs-target="#deleteModal">
-                            <i class="bi bi-trash"></i> Удалить плейлист
+                        <button type="button"
+                                class="btn btn-danger me-2"
+                                id="deleteSelectedBtn"
+                                data-action="{% url 'delete_selected_tracks' downloaded_playlist.id %}"
+                                onclick="openDeleteSelectedModal()"
+                                disabled>
+                            <i class="bi bi-trash"></i> Удалить (<span class="selected-count">0</span>)
                         </button>
-                        <button type="submit" form="downloadForm" class="btn btn-success" id="downloadBtn" disabled>
-                            <i class="bi bi-save"></i> Сохранить выбранные (<span id="selectedCount">0</span>)
+                        <button type="submit"
+                                form="downloadForm"
+                                class="btn btn-success"
+                                id="saveSelectedBtn"
+                                disabled>
+                            <i class="bi bi-save"></i> Сохранить (<span class="selected-count">0</span>)
                         </button>
                     </div>
                 </div>
             </div>
         </div>
-    </div>
+</div>
 </div>
 
-<!-- Modal подтверждения удаления -->
-<div class="modal fade" id="deleteModal" tabindex="-1" aria-labelledby="deleteModalLabel" aria-hidden="true">
+<!-- Modal подтверждения удаления выбранных треков -->
+<div class="modal fade" id="deleteSelectedModal" tabindex="-1" aria-labelledby="deleteSelectedModalLabel" aria-hidden="true">
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header bg-danger text-white">
-                <h5 class="modal-title" id="deleteModalLabel">
+                <h5 class="modal-title" id="deleteSelectedModalLabel">
                     <i class="bi bi-exclamation-triangle"></i> Подтвердите удаление
                 </h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
-                <p>Вы уверены, что хотите удалить плейлист <strong>"{{ downloaded_playlist.title }}"</strong>?</p>
-                <p class="text-danger"><strong>Внимание:</strong> Все скачанные файлы ({{ downloaded_playlist.tracks_count }} треков) будут удалены с диска.</p>
+                <p>Вы уверены, что хотите удалить <strong><span id="deleteSelectedCount">0</span></strong> выбранных трек(ов)?</p>
+                <p class="text-danger"><strong>Внимание:</strong> Файлы треков будут удалены с диска.</p>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
                     <i class="bi bi-x"></i> Отмена
                 </button>
-                <form method="post" action="{% url 'delete_downloaded_playlist' downloaded_playlist.id %}" style="display: inline;">
-                    {% csrf_token %}
-                    <button type="submit" class="btn btn-danger">
-                        <i class="bi bi-trash"></i> Удалить
-                    </button>
-                </form>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Modal подтверждения удаления трека -->
-<div class="modal fade" id="deleteTrackModal" tabindex="-1" aria-labelledby="deleteTrackModalLabel" aria-hidden="true">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header bg-danger text-white">
-                <h5 class="modal-title" id="deleteTrackModalLabel">
-                    <i class="bi bi-exclamation-triangle"></i> Подтвердите удаление
-                </h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body">
-                <p>Вы уверены, что хотите удалить трек <strong id="deleteTrackTitle"></strong>?</p>
-                <p class="text-danger"><strong>Внимание:</strong> Файл будет удален с диска.</p>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
-                    <i class="bi bi-x"></i> Отмена
+                <button type="button" class="btn btn-danger" onclick="confirmDeleteSelected()">
+                    <i class="bi bi-trash"></i> Удалить
                 </button>
-                <form method="post" id="deleteTrackForm" style="display: inline;">
-                    {% csrf_token %}
-                    <button type="submit" class="btn btn-danger">
-                        <i class="bi bi-trash"></i> Удалить
-                    </button>
-                </form>
             </div>
         </div>
     </div>
 </div>
 
 <script>
-function deleteTrack(trackId, trackTitle) {
-    document.getElementById('deleteTrackTitle').textContent = trackTitle;
-    document.getElementById('deleteTrackForm').action = '{% url "delete_downloaded_track" 0 %}'.replace('0', trackId);
-    const modal = new bootstrap.Modal(document.getElementById('deleteTrackModal'));
-    modal.show();
-}
-
 function updateSelectedCount() {
     const checkboxes = document.querySelectorAll('.track-checkbox:checked');
     const count = checkboxes.length;
-    document.getElementById('selectedCount').textContent = count;
-    
-    // Enable/disable download button
-    document.getElementById('downloadBtn').disabled = count === 0;
-    
-    // Update "select all" checkbox state
+
+    // Обновляем счетчики в кнопках
+    document.querySelectorAll('.selected-count').forEach(function(el) {
+        el.textContent = count;
+    });
+
+    // Включаем/отключаем кнопки действий
+    const deleteBtn = document.getElementById('deleteSelectedBtn');
+    const saveBtn = document.getElementById('saveSelectedBtn');
+    if (deleteBtn) {
+        deleteBtn.disabled = count === 0;
+    }
+    if (saveBtn) {
+        saveBtn.disabled = count === 0;
+    }
+
+    // Обновляем состояние чекбокса "выбрать все"
     const allCheckboxes = document.querySelectorAll('.track-checkbox');
     const selectAllCheckbox = document.getElementById('selectAllCheckbox');
-    selectAllCheckbox.checked = checkboxes.length === allCheckboxes.length && allCheckboxes.length > 0;
+    if (selectAllCheckbox) {
+        selectAllCheckbox.checked = count === allCheckboxes.length && allCheckboxes.length > 0;
+        selectAllCheckbox.indeterminate = count > 0 && count < allCheckboxes.length;
+    }
 }
 
 function toggleAll(checkbox) {
     const checkboxes = document.querySelectorAll('.track-checkbox');
-    checkboxes.forEach(cb => cb.checked = checkbox.checked);
+    checkboxes.forEach(function(cb) {
+        cb.checked = checkbox.checked;
+    });
     updateSelectedCount();
 }
 
-// Add change listeners to all checkboxes
+function openDeleteSelectedModal() {
+    const count = document.querySelectorAll('.track-checkbox:checked').length;
+    if (count === 0) {
+        return;
+    }
+
+    const countSpan = document.getElementById('deleteSelectedCount');
+    if (countSpan) {
+        countSpan.textContent = count;
+    }
+
+    const modalElement = document.getElementById('deleteSelectedModal');
+    if (modalElement) {
+        const modal = new bootstrap.Modal(modalElement);
+        modal.show();
+    }
+}
+
+function confirmDeleteSelected() {
+    const form = document.getElementById('downloadForm');
+    const deleteBtn = document.getElementById('deleteSelectedBtn');
+    if (!form || !deleteBtn) {
+        return;
+    }
+
+    const action = deleteBtn.getAttribute('data-action');
+    if (action) {
+        form.action = action;
+    }
+
+    form.submit();
+}
+
+// Добавляем обработчики для всех чекбоксов
 document.addEventListener('DOMContentLoaded', function() {
-    document.querySelectorAll('.track-checkbox').forEach(checkbox => {
+    document.querySelectorAll('.track-checkbox').forEach(function(checkbox) {
         checkbox.addEventListener('change', updateSelectedCount);
     });
     updateSelectedCount();

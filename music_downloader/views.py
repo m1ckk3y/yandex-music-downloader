@@ -526,6 +526,51 @@ def download_zip_view(request, playlist_id):
 
 
 @login_required
+def delete_selected_tracks_view(request, playlist_id):
+    """Групповое удаление выбранных треков из скачанного плейлиста"""
+    downloaded_playlist = get_object_or_404(DownloadedPlaylist, id=playlist_id, user=request.user)
+
+    if request.method != 'POST':
+        return redirect('downloaded_playlist_detail', playlist_id=playlist_id)
+
+    track_ids = request.POST.getlist('tracks')
+    if not track_ids:
+        messages.warning(request, 'Выберите хотя бы один трек для удаления')
+        return redirect('downloaded_playlist_detail', playlist_id=playlist_id)
+
+    try:
+        track_ids_int = [int(tid) for tid in track_ids]
+    except ValueError:
+        messages.error(request, 'Некорректные идентификаторы треков')
+        return redirect('downloaded_playlist_detail', playlist_id=playlist_id)
+
+    media_root = Path(settings.MEDIA_ROOT)
+    tracks = downloaded_playlist.tracks.filter(id__in=track_ids_int)
+
+    deleted_count = 0
+    for track in tracks:
+        file_path = media_root / track.file_path
+        if file_path.exists():
+            try:
+                file_path.unlink()
+            except Exception as e:
+                print(f"Error deleting file {file_path}: {e}")
+        track.delete()
+        deleted_count += 1
+
+    # Обновляем счетчик треков в плейлисте
+    downloaded_playlist.tracks_count = downloaded_playlist.tracks.count()
+    downloaded_playlist.save()
+
+    if deleted_count:
+        messages.success(request, f'Удалено {deleted_count} трек(ов)')
+    else:
+        messages.warning(request, 'Не удалось удалить выбранные треки')
+
+    return redirect('downloaded_playlist_detail', playlist_id=playlist_id)
+
+
+@login_required
 def delete_downloaded_track_view(request, track_id):
     """Удаление отдельного трека"""
     track = get_object_or_404(DownloadedTrack, id=track_id)

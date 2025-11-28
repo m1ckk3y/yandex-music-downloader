@@ -19,6 +19,7 @@ urlpatterns = [
     path('downloaded/<int:playlist_id>/', views.downloaded_playlist_detail_view, name='downloaded_playlist_detail'),
     path('downloaded/<int:playlist_id>/delete/', views.delete_downloaded_playlist_view, name='delete_downloaded_playlist'),
     path('downloaded/<int:playlist_id>/download-zip/', views.download_zip_view, name='download_zip'),
+    path('downloaded/<int:playlist_id>/delete-selected/', views.delete_selected_tracks_view, name='delete_selected_tracks'),
     path('downloaded/track/<int:track_id>/delete/', views.delete_downloaded_track_view, name='delete_downloaded_track'),
     path('download-file/<int:track_id>/', views.download_file_view, name='download_file'),
 ]
